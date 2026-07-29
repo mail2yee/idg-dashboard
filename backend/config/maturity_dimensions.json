@@ -1,0 +1,47 @@
+{
+  "dimensions": [
+    {
+      "key": "api",
+      "label": "API 可用性",
+      "weight": 1.0,
+      "responsible_role": "IT Owner",
+      "rule": { "type": "boolean_field", "field": "has_api" }
+    },
+    {
+      "key": "metadata",
+      "label": "Metadata 完整度",
+      "weight": 1.0,
+      "responsible_role": "Data Steward",
+      "rule": {
+        "type": "weighted_fields",
+        "components": [
+          { "field": "field_description_coverage", "weight": 0.6 },
+          { "field": "has_owner", "weight": 0.2 },
+          { "field": "has_domain", "weight": 0.1 },
+          { "field": "has_glossary", "weight": 0.1 }
+        ]
+      }
+    },
+    {
+      "key": "lineage",
+      "label": "Pipeline / Lineage",
+      "weight": 1.0,
+      "responsible_role": "IT Owner",
+      "rule": { "type": "boolean_field", "field": "has_lineage" }
+    },
+    {
+      "key": "alerting",
+      "label": "Alerting",
+      "weight": 1.0,
+      "responsible_role": "IT Owner",
+      "rule": { "type": "assertion_pass" }
+    },
+    {
+      "key": "freshness",
+      "label": "Freshness",
+      "weight": 1.0,
+      "responsible_role": "IT Owner",
+      "rule": { "type": "threshold_lte", "field": "freshness_days", "value": 7 }
+    }
+  ]
+}

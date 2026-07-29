@@ -1,0 +1,30 @@
+# Full on-prem deploy stack: mongo + backend + frontend, all containerized.
+# Run via ./deploy.sh (or `docker compose -p idg-deploy -f docker-compose.deploy.yml up -d --build`).
+# Separate from docker-compose.yml, which only runs Mongo for local dev
+# against the backend/frontend dev servers (hot reload).
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      MONGO_DB: idg_dashboard
+    depends_on:
+      - mongo
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8081}:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
