@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Drawer, Box, Typography, IconButton, Stack, Divider, LinearProgress, List, ListItemButton, Chip } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
+import BusinessIcon from '@mui/icons-material/Business'
 import ReactECharts from 'echarts-for-react'
 import { api, type OwnerTeamDetail } from '../api/client'
 import { useStore } from '../state/store'
@@ -58,7 +59,10 @@ export default function OwnerTeamDetailDrawer() {
         {detail && (
           <>
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <Typography variant="h6">🏢 {detail.team}</Typography>
+              <Stack direction="row" spacing={0.8} sx={{ alignItems: 'center' }}>
+                <BusinessIcon fontSize="small" />
+                <Typography variant="h6">{detail.team}</Typography>
+              </Stack>
               <IconButton onClick={() => setSelectedOwnerTeamDetail(null)}>
                 <CloseIcon />
               </IconButton>

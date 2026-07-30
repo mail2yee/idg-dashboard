@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Card, CardContent, Typography, Box, Stack, LinearProgress, Chip, Button } from '@mui/material'
+import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'
+import MilitaryTechIcon from '@mui/icons-material/MilitaryTech'
+import RocketLaunchIcon from '@mui/icons-material/RocketLaunch'
+import TrendingUpIcon from '@mui/icons-material/TrendingUp'
+import StarIcon from '@mui/icons-material/Star'
+import BusinessIcon from '@mui/icons-material/Business'
 import { api, type DomainTrendSummary, type SubjectTrendSummary, type OwnerTeamTrendSummary } from '../api/client'
 import { useStore } from '../state/store'
 import { domainColor, DOMAIN_ORDER, categorical, status } from '../theme/palette'
@@ -26,7 +32,7 @@ function DomainBadgeCard({
     >
       <CardContent>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-          <Typography sx={{ fontSize: 22, lineHeight: 1 }}>{tier.icon}</Typography>
+          <MilitaryTechIcon sx={{ fontSize: 22, color: tier.color }} />
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
               {tier.label}
@@ -73,14 +79,17 @@ function TeamBadgeCard({
     <Card variant="outlined" onClick={onClick} sx={{ width: 200, flexShrink: 0, borderColor: 'divider', cursor: 'pointer' }}>
       <CardContent>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-          <Typography sx={{ fontSize: 22, lineHeight: 1 }}>{tier.icon}</Typography>
-          <Box>
+          <MilitaryTechIcon sx={{ fontSize: 22, color: tier.color }} />
+          <Box sx={{ minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
               {tier.label}
             </Typography>
-            <Typography variant="subtitle2" noWrap title={t.team}>
-              🏢 {t.team}
-            </Typography>
+            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+              <BusinessIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
+              <Typography variant="subtitle2" noWrap title={t.team}>
+                {t.team}
+              </Typography>
+            </Stack>
           </Box>
         </Stack>
         <LinearProgress
@@ -122,7 +131,7 @@ function SubjectBadgeCard({
     >
       <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
         <Stack direction="row" spacing={0.6} sx={{ alignItems: 'center', mb: 0.4 }}>
-          <Typography sx={{ fontSize: 16, lineHeight: 1 }}>{tier.icon}</Typography>
+          <MilitaryTechIcon sx={{ fontSize: 16, color: tier.color }} />
           <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: domainColor(s.domain, mode), flexShrink: 0 }} />
           <Typography variant="caption" color="text.secondary" noWrap>
             {s.domain}
@@ -183,10 +192,13 @@ function ChampionCard({
         </Typography>
         {name ? (
           <Stack direction="row" sx={{ alignItems: 'baseline', justifyContent: 'space-between', mt: 0.5 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              🏆 {name}
-              {sub ? ` · ${sub}` : ''}
-            </Typography>
+            <Stack direction="row" spacing={0.8} sx={{ alignItems: 'center' }}>
+              <EmojiEventsIcon sx={{ color: status.good, fontSize: 22 }} />
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                {name}
+                {sub ? ` · ${sub}` : ''}
+              </Typography>
+            </Stack>
             <Typography variant="body2" sx={{ color: status.good, fontWeight: 600 }}>
               +{delta?.toFixed(2)}
             </Typography>
@@ -202,19 +214,22 @@ function ChampionCard({
 }
 
 function SpotlightRow({
+  icon,
   title,
   emptyText,
   items,
 }: {
+  icon: ReactNode
   title: string
   emptyText: string
   items: { label: string; sub?: string; delta: number }[]
 }) {
   return (
     <Box sx={{ mt: 3 }}>
-      <Typography variant="subtitle2" gutterBottom>
-        {title}
-      </Typography>
+      <Stack direction="row" spacing={0.7} sx={{ alignItems: 'center', mb: 0.5 }}>
+        {icon}
+        <Typography variant="subtitle2">{title}</Typography>
+      </Stack>
       {items.length === 0 ? (
         <Typography variant="body2" color="text.secondary">
           {emptyText}
@@ -307,7 +322,7 @@ export default function LeaderboardSection() {
     <Card>
       <CardContent>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-          <Typography sx={{ fontSize: 20 }}>🏆</Typography>
+          <EmojiEventsIcon sx={{ fontSize: 20 }} />
           <Typography variant="subtitle1">Leaderboard</Typography>
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -380,15 +395,27 @@ export default function LeaderboardSection() {
           ))}
         </Stack>
 
-        <SpotlightRow title="🚀 本週最進步部門 Top 3" emptyText="這週大家都持平,繼續加油!" items={topWeeklyDomains} />
-        <SpotlightRow title="📈 本月最進步部門 Top 3" emptyText="這個月還沒有明顯進步的部門,一起加油!" items={topMonthlyDomains} />
         <SpotlightRow
-          title="🌟 本週最進步 Data Subjects Top 3"
+          icon={<RocketLaunchIcon sx={{ fontSize: 18, color: categorical[mode][0] }} />}
+          title="本週最進步部門 Top 3"
+          emptyText="這週大家都持平,繼續加油!"
+          items={topWeeklyDomains}
+        />
+        <SpotlightRow
+          icon={<TrendingUpIcon sx={{ fontSize: 18, color: categorical[mode][0] }} />}
+          title="本月最進步部門 Top 3"
+          emptyText="這個月還沒有明顯進步的部門,一起加油!"
+          items={topMonthlyDomains}
+        />
+        <SpotlightRow
+          icon={<StarIcon sx={{ fontSize: 18, color: categorical[mode][0] }} />}
+          title="本週最進步 Data Subjects Top 3"
           emptyText="這週還沒有明顯進步的 subject,一起加油!"
           items={topWeeklySubjects}
         />
         <SpotlightRow
-          title="🎖️ 本月最進步 Data Subjects Top 3"
+          icon={<MilitaryTechIcon sx={{ fontSize: 18, color: categorical[mode][0] }} />}
+          title="本月最進步 Data Subjects Top 3"
           emptyText="這個月還沒有明顯進步的 subject,一起加油!"
           items={topMonthlySubjects}
         />
