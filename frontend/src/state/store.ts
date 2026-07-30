@@ -5,6 +5,8 @@ import type { DimensionMeta, LevelMeta } from '../api/client'
 interface ChatMessage {
   role: 'user' | 'agent'
   text: string
+  steps?: string[]
+  pending?: boolean
 }
 
 interface DashboardState {
@@ -53,6 +55,7 @@ interface DashboardState {
   setAgentOpen: (open: boolean) => void
   agentMessages: ChatMessage[]
   addAgentMessage: (m: ChatMessage) => void
+  updateLastAgentMessage: (updater: (m: ChatMessage) => ChatMessage) => void
 }
 
 const prefersDark =
@@ -97,4 +100,11 @@ export const useStore = create<DashboardState>((set) => ({
   setAgentOpen: (open) => set({ agentOpen: open }),
   agentMessages: [],
   addAgentMessage: (m) => set((s) => ({ agentMessages: [...s.agentMessages, m] })),
+  updateLastAgentMessage: (updater) =>
+    set((s) => {
+      if (s.agentMessages.length === 0) return s
+      const messages = s.agentMessages.slice()
+      messages[messages.length - 1] = updater(messages[messages.length - 1])
+      return { agentMessages: messages }
+    }),
 }))

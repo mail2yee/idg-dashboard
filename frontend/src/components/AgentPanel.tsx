@@ -3,7 +3,7 @@ import { Fab, Paper, Box, Stack, Typography, TextField, IconButton, Avatar, Circ
 import SmartToyIcon from '@mui/icons-material/SmartToy'
 import CloseIcon from '@mui/icons-material/Close'
 import SendIcon from '@mui/icons-material/Send'
-import { api, type AgentResponse } from '../api/client'
+import { streamAgentChat, type AgentResponse } from '../api/client'
 import { useStore } from '../state/store'
 import { categorical } from '../theme/palette'
 
@@ -15,6 +15,7 @@ export default function AgentPanel() {
   const setAgentOpen = useStore((s) => s.setAgentOpen)
   const messages = useStore((s) => s.agentMessages)
   const addAgentMessage = useStore((s) => s.addAgentMessage)
+  const updateLastAgentMessage = useStore((s) => s.updateLastAgentMessage)
   const clearFilters = useStore((s) => s.clearFilters)
   const setHighlightedDomains = useStore((s) => s.setHighlightedDomains)
   const setHighlightedSubjectIds = useStore((s) => s.setHighlightedSubjectIds)
@@ -56,17 +57,28 @@ export default function AgentPanel() {
   async function send(question: string) {
     if (!question.trim() || sending) return
     addAgentMessage({ role: 'user', text: question })
+    addAgentMessage({ role: 'agent', text: '', steps: [], pending: true })
     setInput('')
     setSending(true)
-    try {
-      const res = await api.agentQuery(question)
-      addAgentMessage({ role: 'agent', text: res.answer_text })
-      applyDirective(res.chart_directive)
-    } catch {
-      addAgentMessage({ role: 'agent', text: '查詢失敗,請稍後再試。' })
-    } finally {
-      setSending(false)
-    }
+
+    let accumulated = ''
+    await streamAgentChat(question, {
+      onStep: (text) => {
+        updateLastAgentMessage((m) => ({ ...m, steps: [...(m.steps ?? []), text] }))
+      },
+      onToken: (text) => {
+        accumulated += text
+        updateLastAgentMessage((m) => ({ ...m, text: accumulated }))
+      },
+      onFinal: (evt) => {
+        updateLastAgentMessage((m) => ({ ...m, text: evt.reply || accumulated, pending: false }))
+        applyDirective(evt.chart_directive)
+      },
+      onError: () => {
+        updateLastAgentMessage((m) => ({ ...m, text: '查詢失敗,請稍後再試。', pending: false }))
+      },
+    })
+    setSending(false)
   }
 
   const accent = categorical[mode][0]
@@ -135,18 +147,28 @@ export default function AgentPanel() {
                       borderRadius: 2,
                     }}
                   >
-                    <Typography variant="body2">{m.text}</Typography>
+                    {m.steps && m.steps.length > 0 && (
+                      <Stack spacing={0.3} sx={{ mb: m.text ? 0.6 : 0 }}>
+                        {m.steps.map((step, si) => (
+                          <Typography key={si} variant="caption" color="text.secondary">
+                            {step}
+                          </Typography>
+                        ))}
+                      </Stack>
+                    )}
+                    {m.pending && !m.text ? (
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <CircularProgress size={12} />
+                        <Typography variant="caption" color="text.secondary">
+                          思考中…
+                        </Typography>
+                      </Stack>
+                    ) : (
+                      <Typography variant="body2">{m.text}</Typography>
+                    )}
                   </Paper>
                 </Stack>
               ))}
-              {sending && (
-                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                  <CircularProgress size={14} />
-                  <Typography variant="caption" color="text.secondary">
-                    思考中…
-                  </Typography>
-                </Stack>
-              )}
             </Stack>
           </Box>
 

@@ -195,3 +195,52 @@ export const api = {
     get<{ trend: MaturitySnapshot[] }>(`/subjects/${id}/trend?period=${period}`),
   agentQuery: (question: string) => post<AgentResponse>('/agent/query', { question }),
 }
+
+export interface AgentChatCallbacks {
+  onStep?: (text: string) => void
+  onToken?: (text: string) => void
+  onFinal?: (evt: AgentResponse & { reply: string }) => void
+  onError?: (err: unknown) => void
+}
+
+// SSE consumer for /agent/chat: EventSource can't send a POST body, so this
+// reads the fetch response body as a raw stream and parses `data: {...}\n\n`
+// frames itself (same approach as the intelligent-data-governance-agent-onprem
+// project's streamChat()).
+export async function streamAgentChat(question: string, callbacks: AgentChatCallbacks = {}): Promise<void> {
+  const { onStep, onToken, onFinal, onError } = callbacks
+  try {
+    const res = await fetch('/api/agent/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+    })
+    if (!res.ok || !res.body) throw new Error(`POST /agent/chat failed: ${res.status}`)
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() ?? ''
+      for (const part of parts) {
+        const line = part.trim()
+        if (!line.startsWith('data:')) continue
+        let evt: Record<string, unknown>
+        try {
+          evt = JSON.parse(line.slice(5).trim())
+        } catch {
+          continue
+        }
+        if (evt.type === 'step' && onStep) onStep(evt.text as string)
+        else if (evt.type === 'token' && onToken) onToken(evt.text as string)
+        else if (evt.type === 'final' && onFinal) onFinal(evt as unknown as AgentResponse & { reply: string })
+      }
+    }
+  } catch (err) {
+    if (onError) onError(err)
+  }
+}
