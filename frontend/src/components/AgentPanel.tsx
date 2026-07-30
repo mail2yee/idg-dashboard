@@ -7,7 +7,7 @@ import { api, type AgentResponse } from '../api/client'
 import { useStore } from '../state/store'
 import { categorical } from '../theme/palette'
 
-const SUGGESTIONS = ['目前 data maturity 最高的三個部門?', '哪個部門排名最後?', '全公司過去的 maturity 趨勢?']
+const SUGGESTIONS = ['目前 data maturity 最高的三個 Domain?', '哪個 Domain 排名最後?', '全公司過去的 maturity 趨勢?']
 
 export default function AgentPanel() {
   const mode = useStore((s) => s.mode)

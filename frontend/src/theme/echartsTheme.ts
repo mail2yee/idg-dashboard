@@ -25,3 +25,10 @@ export function tooltipStyle(mode: Mode) {
 }
 
 export const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", sans-serif'
+
+// "2026-06-08T00:00:00" -> "06/08" — MM/DD reads more naturally than MM-DD
+// (the hyphen looks like a range/minus sign at a glance). Shared so every
+// weekly-snapshot chart's x-axis labels are formatted identically.
+export function formatWeekLabel(isoDate: string): string {
+  return isoDate.slice(5, 10).replace('-', '/')
+}

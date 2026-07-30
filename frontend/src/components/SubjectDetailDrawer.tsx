@@ -16,7 +16,8 @@ import ReactECharts from 'echarts-for-react'
 import { api, type SubjectDetail, type MaturitySnapshot } from '../api/client'
 import { useStore } from '../state/store'
 import { chrome, categorical, status, domainColor } from '../theme/palette'
-import { baseAxis, tooltipStyle } from '../theme/echartsTheme'
+import { getLevelColor } from '../theme/badges'
+import { baseAxis, tooltipStyle, formatWeekLabel } from '../theme/echartsTheme'
 
 const ROLE_LABELS: Record<string, string> = {
   DATA_OWNER: 'Data Owner',
@@ -27,7 +28,7 @@ const ROLE_ORDER = ['DATA_OWNER', 'DATA_STEWARD', 'IT_OWNER']
 
 export default function SubjectDetailDrawer() {
   const mode = useStore((s) => s.mode)
-  const maxScore = useStore((s) => s.maxScore)
+  const maxLevel = useStore((s) => s.maxLevel)
   const dimensionLabels = useStore((s) => s.dimensions)
   const selectedSubjectId = useStore((s) => s.selectedSubjectId)
   const setSelectedSubjectId = useStore((s) => s.setSelectedSubjectId)
@@ -49,15 +50,15 @@ export default function SubjectDetailDrawer() {
     tooltip: { trigger: 'axis', ...tooltipStyle(mode) },
     xAxis: {
       type: 'category',
-      data: trend.map((t) => t.snapshot_date.slice(5, 10)),
+      data: trend.map((t) => formatWeekLabel(t.snapshot_date)),
       ...baseAxis(mode),
       splitLine: { show: false },
     },
-    yAxis: { type: 'value', min: 0, max: maxScore, ...baseAxis(mode) },
+    yAxis: { type: 'value', min: 0, max: maxLevel, ...baseAxis(mode) },
     series: [
       {
         type: 'line',
-        data: trend.map((t) => t.maturity_score),
+        data: trend.map((t) => t.maturity_level),
         lineStyle: { width: 2, color: accent },
         itemStyle: { color: accent, borderColor: c.surface, borderWidth: 2 },
         showSymbol: true,
@@ -75,11 +76,21 @@ export default function SubjectDetailDrawer() {
             <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Box>
                 <Typography variant="h6">{detail.subject.name}</Typography>
-                <Chip
-                  size="small"
-                  label={detail.subject.domain}
-                  sx={{ bgcolor: domainColor(detail.subject.domain, mode), color: '#fff', mt: 0.5 }}
-                />
+                <Stack direction="row" spacing={1} sx={{ mt: 0.5, alignItems: 'center' }}>
+                  <Chip
+                    size="small"
+                    label={detail.subject.domain}
+                    sx={{ bgcolor: domainColor(detail.subject.domain, mode), color: '#fff' }}
+                  />
+                  {detail.snapshot && (
+                    <Chip
+                      size="small"
+                      icon={<Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: getLevelColor(detail.snapshot.maturity_level), ml: 1 }} />}
+                      label={`L${detail.snapshot.maturity_level}`}
+                      variant="outlined"
+                    />
+                  )}
+                </Stack>
               </Box>
               <IconButton onClick={() => setSelectedSubjectId(null)}>
                 <CloseIcon />
@@ -93,7 +104,7 @@ export default function SubjectDetailDrawer() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="subtitle2" gutterBottom>
-              Maturity Trend
+              Maturity Level Trend
             </Typography>
             <Box sx={{ height: 160 }}>
               <ReactECharts option={trendOption} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} />
@@ -102,7 +113,7 @@ export default function SubjectDetailDrawer() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="subtitle2" gutterBottom>
-              {maxScore} 分制拆解(目前 {detail.snapshot?.maturity_score.toFixed(2) ?? '—'} 分)
+              KPI 拆解(構成 Maturity Level 的底層指標)
             </Typography>
             <Stack spacing={1.2}>
               {detail.snapshot &&

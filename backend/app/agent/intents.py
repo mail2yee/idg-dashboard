@@ -62,10 +62,10 @@ async def run_top_n_by_maturity(n: int = 3, group_by: str = "domain", descending
         latest_date = await _latest_domain_snapshot_date()
         docs = await db.org_quality_index_snapshots.find(
             {"scope_type": "DOMAIN", "snapshot_date": latest_date}
-        ).sort("avg_maturity_score", order).limit(n).to_list(length=None)
+        ).sort("avg_maturity_level", order).limit(n).to_list(length=None)
         names = [d["domain"] for d in docs]
-        answer = f"目前 data maturity {label}的 {n} 個部門是:" + "、".join(
-            f"{d['domain']}({d['avg_maturity_score']}分)" for d in docs
+        answer = f"目前 data maturity {label}的 {n} 個 Domain 是:" + "、".join(
+            f"{d['domain']}(L{d['avg_maturity_level']:.1f})" for d in docs
         )
         return {
             "answer_text": answer,
@@ -76,13 +76,13 @@ async def run_top_n_by_maturity(n: int = 3, group_by: str = "domain", descending
     latest_snap_doc = await db.maturity_snapshots.find_one(sort=[("snapshot_date", -1)])
     latest_date = latest_snap_doc["snapshot_date"] if latest_snap_doc else None
     docs = await db.maturity_snapshots.find({"snapshot_date": latest_date}).sort(
-        "maturity_score", order
+        "maturity_level", order
     ).limit(n).to_list(length=None)
     subject_ids = [d["subject_id"] for d in docs]
     subjects = await db.data_subjects.find({"_id": {"$in": subject_ids}}).to_list(length=None)
     subj_by_id = {s["_id"]: s for s in subjects}
     answer_parts = [
-        f"{subj_by_id[d['subject_id']]['name']}({d['maturity_score']}分)"
+        f"{subj_by_id[d['subject_id']]['name']}(L{d['maturity_level']})"
         for d in docs if d["subject_id"] in subj_by_id
     ]
     answer = f"目前 maturity {label}的 {n} 個 data subject 是:" + "、".join(answer_parts)
@@ -97,8 +97,8 @@ async def run_domain_ranking():
     latest_date = await _latest_domain_snapshot_date()
     docs = await db.org_quality_index_snapshots.find(
         {"scope_type": "DOMAIN", "snapshot_date": latest_date}
-    ).sort("avg_maturity_score", -1).to_list(length=None)
-    answer = "各部門 maturity 排名:" + "、".join(f"{d['domain']}({d['avg_maturity_score']}分)" for d in docs)
+    ).sort("avg_maturity_level", -1).to_list(length=None)
+    answer = "各 Domain maturity 排名:" + "、".join(f"{d['domain']}(L{d['avg_maturity_level']:.1f})" for d in docs)
     return {
         "answer_text": answer,
         "chart_directive": {"type": "show_domain_ranking"},
@@ -117,8 +117,8 @@ async def run_subject_detail(name_hint: str):
     latest_date_doc = await db.maturity_snapshots.find_one(sort=[("snapshot_date", -1)])
     latest_date = latest_date_doc["snapshot_date"] if latest_date_doc else None
     snapshot = await db.maturity_snapshots.find_one({"subject_id": subject["_id"], "snapshot_date": latest_date})
-    score = snapshot["maturity_score"] if snapshot else "未知"
-    answer = f"{subject['name']}(domain: {subject['domain']})目前 maturity score 為 {score} 分。"
+    level = f"L{snapshot['maturity_level']}" if snapshot else "未知"
+    answer = f"{subject['name']}(domain: {subject['domain']})目前 maturity level 為 {level}。"
     return {
         "answer_text": answer,
         "chart_directive": {"type": "open_subject_detail", "subject_id": str(subject["_id"])},
@@ -173,7 +173,7 @@ async def classify_and_run(question: str):
     return {
         "answer_text": (
             "這是規則式的示範版本(尚未接上內部 Gemma API),"
-            "可以試著問:「maturity 最高的三個部門?」、「哪個部門排名最後?」、"
+            "可以試著問:「maturity 最高的三個 Domain?」、「哪個 Domain 排名最後?」、"
             "或「全公司過去的 maturity 趨勢?」"
         ),
         "chart_directive": None,

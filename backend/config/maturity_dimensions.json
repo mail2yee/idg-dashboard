@@ -43,5 +43,12 @@
       "responsible_role": "IT Owner",
       "rule": { "type": "threshold_lte", "field": "freshness_days", "value": 7 }
     }
+  ],
+  "maturity_levels": [
+    { "level": 1, "label": "L1", "description": "Metadata 有值", "rule": { "type": "boolean_field", "field": "has_description" } },
+    { "level": 2, "label": "L2", "description": "資料即時", "rule": { "type": "threshold_lte", "field": "freshness_days", "value": 7 } },
+    { "level": 3, "label": "L3", "description": "提供 API", "rule": { "type": "boolean_field", "field": "has_api" } },
+    { "level": 4, "label": "L4", "description": "有資料品質檢查(Assertion)", "rule": { "type": "assertion_pass" } },
+    { "level": 5, "label": "L5", "description": "所有 KPI 都滿足(含 Lineage)", "rule": { "type": "boolean_field", "field": "has_lineage" } }
   ]
 }

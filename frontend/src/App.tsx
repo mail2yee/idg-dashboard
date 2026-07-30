@@ -17,12 +17,14 @@ export default function App() {
   const mode = useStore((s) => s.mode)
   const toggleMode = useStore((s) => s.toggleMode)
   const setDimensionConfig = useStore((s) => s.setDimensionConfig)
+  const setLevelConfig = useStore((s) => s.setLevelConfig)
   const theme = useMemo(() => buildMuiTheme(mode), [mode])
   const [tab, setTab] = useState<'overview' | 'trends' | 'kpi'>('overview')
 
   useEffect(() => {
     api.configDimensions().then((res) => setDimensionConfig(res.dimensions, res.max_score))
-  }, [setDimensionConfig])
+    api.configLevels().then((res) => setLevelConfig(res.levels, res.max_level))
+  }, [setDimensionConfig, setLevelConfig])
 
   return (
     <ThemeProvider theme={theme}>
@@ -34,7 +36,7 @@ export default function App() {
           </Typography>
           <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ minHeight: 'auto' }}>
             <Tab value="overview" label="總覽" sx={{ minHeight: 'auto' }} />
-            <Tab value="trends" label="週 / 月變化" sx={{ minHeight: 'auto' }} />
+            <Tab value="trends" label="週 / 月 / 年變化" sx={{ minHeight: 'auto' }} />
             <Tab value="kpi" label="KPI 拆解" sx={{ minHeight: 'auto' }} />
           </Tabs>
           <IconButton onClick={toggleMode} sx={{ ml: 2 }}>

@@ -1,14 +1,17 @@
+export type Period = 'week' | 'month' | 'year'
+
 export interface OrgSnapshot {
   id: string
   scope_type: 'GLOBAL' | 'DOMAIN'
   scope_id: string | null
   domain: string | null
   snapshot_date: string
-  avg_maturity_score: number
+  avg_maturity_level: number
   subject_count: number
   data_quality_index: number
   wow_delta: number
   mom_delta: number
+  yoy_delta: number
 }
 
 export interface Subject {
@@ -27,7 +30,7 @@ export interface Subject {
   status: string
   created_at: string
   last_synced_at: string
-  maturity_score: number | null
+  maturity_level: number | null
   sub_scores: Record<string, number> | null
 }
 
@@ -35,7 +38,7 @@ export interface MaturitySnapshot {
   id: string
   subject_id: string
   snapshot_date: string
-  maturity_score: number
+  maturity_level: number
   sub_scores: Record<string, number>
   kpis: Record<string, unknown>
 }
@@ -50,21 +53,24 @@ export interface SubjectDetail {
   schema_fields: Record<string, unknown>[]
 }
 
-export interface DomainTrendSummary {
-  domain: string
-  avg_maturity_score: number
+interface PeriodDeltas {
   wow_delta: number
   mom_delta: number
+  yoy_delta: number
+  delta: number
+}
+
+export interface DomainTrendSummary extends PeriodDeltas {
+  domain: string
+  avg_maturity_level: number
   series: number[]
 }
 
-export interface SubjectTrendSummary {
+export interface SubjectTrendSummary extends PeriodDeltas {
   id: string
   name: string
   domain: string
-  maturity_score: number
-  wow_delta: number
-  mom_delta: number
+  maturity_level: number
   series: number[]
 }
 
@@ -77,14 +83,12 @@ export interface DomainDimensionBreakdown {
   freshness: number
 }
 
-export interface DomainDetail {
+export interface DomainDetail extends PeriodDeltas {
   domain: string
-  avg_maturity_score: number
-  wow_delta: number
-  mom_delta: number
-  series: { date: string; score: number }[]
+  avg_maturity_level: number
+  series: { date: string; level: number }[]
   avg_sub_scores: Record<string, number>
-  subjects: { id: string; name: string; maturity_score: number; wow_delta: number }[]
+  subjects: { id: string; name: string; maturity_level: number; wow_delta: number }[]
 }
 
 export interface DimensionMeta {
@@ -94,23 +98,32 @@ export interface DimensionMeta {
   responsible_role: string | null
 }
 
-export interface OwnerTeamTrendSummary {
+export interface LevelMeta {
+  level: number
+  label: string
+  description: string | null
+}
+
+export interface OwnerTeamTrendSummary extends PeriodDeltas {
   team: string
-  avg_maturity_score: number
-  wow_delta: number
-  mom_delta: number
+  avg_maturity_level: number
   series: number[]
   subject_count: number
 }
 
-export interface OwnerTeamDetail {
+export interface OwnerTeamDetail extends PeriodDeltas {
   team: string
-  avg_maturity_score: number
-  wow_delta: number
-  mom_delta: number
-  series: { date: string; score: number }[]
+  avg_maturity_level: number
+  series: { date: string; level: number }[]
   avg_sub_scores: Record<string, number>
-  subjects: { id: string; name: string; domain: string; maturity_score: number; wow_delta: number }[]
+  subjects: { id: string; name: string; domain: string; maturity_level: number; wow_delta: number }[]
+}
+
+export interface LevelDistribution {
+  dates: string[]
+  series: Record<string, number[]>
+  min_level: number
+  max_level: number
 }
 
 export interface AgentResponse {
@@ -138,15 +151,22 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 export const api = {
   maturitySummary: () => get<{ latest: OrgSnapshot; trend: OrgSnapshot[] }>('/maturity/summary'),
   maturityDistribution: () =>
-    get<{ buckets: { range: string; count: number }[]; max_score: number }>('/maturity/distribution'),
+    get<{ levels: { level: number; count: number }[]; max_level: number }>('/maturity/distribution'),
   configDimensions: () => get<{ dimensions: DimensionMeta[]; max_score: number }>('/config/dimensions'),
+  configLevels: () => get<{ levels: LevelMeta[]; max_level: number }>('/config/levels'),
   domainRanking: () => get<{ domains: OrgSnapshot[] }>('/domains/ranking'),
-  domainsTrendSummary: () => get<{ domains: DomainTrendSummary[] }>('/domains/trend-summary'),
-  domainDetail: (domain: string) => get<DomainDetail>(`/domains/${encodeURIComponent(domain)}/detail`),
+  domainsTrendSummary: (period: Period = 'week') =>
+    get<{ domains: DomainTrendSummary[] }>(`/domains/trend-summary?period=${period}`),
+  domainDetail: (domain: string, period: Period = 'week') =>
+    get<DomainDetail>(`/domains/${encodeURIComponent(domain)}/detail?period=${period}`),
   domainsDimensionBreakdown: () => get<{ domains: DomainDimensionBreakdown[] }>('/domains/dimension-breakdown'),
-  ownerTeamsTrendSummary: () => get<{ teams: OwnerTeamTrendSummary[] }>('/owner-teams/trend-summary'),
-  ownerTeamDetail: (team: string) => get<OwnerTeamDetail>(`/owner-teams/${encodeURIComponent(team)}/detail`),
-  subjectsTrendSummary: (params: { domain?: string; search?: string }) => {
+  domainsLevelDistribution: (period: Period = 'week') =>
+    get<LevelDistribution>(`/domains/level-distribution?period=${period}`),
+  ownerTeamsTrendSummary: (period: Period = 'week') =>
+    get<{ teams: OwnerTeamTrendSummary[] }>(`/owner-teams/trend-summary?period=${period}`),
+  ownerTeamDetail: (team: string, period: Period = 'week') =>
+    get<OwnerTeamDetail>(`/owner-teams/${encodeURIComponent(team)}/detail?period=${period}`),
+  subjectsTrendSummary: (params: { domain?: string; search?: string; period?: Period }) => {
     const qs = new URLSearchParams()
     Object.entries(params).forEach(([k, v]) => {
       if (v) qs.set(k, v)
@@ -154,7 +174,15 @@ export const api = {
     const q = qs.toString()
     return get<{ subjects: SubjectTrendSummary[] }>(`/subjects/trend-summary${q ? `?${q}` : ''}`)
   },
-  subjects: (params: { domain?: string; min_score?: number; max_score?: number; search?: string }) => {
+  subjectsLevelDistribution: (params: { domain?: string; search?: string; period?: Period }) => {
+    const qs = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => {
+      if (v) qs.set(k, v)
+    })
+    const q = qs.toString()
+    return get<LevelDistribution>(`/subjects/level-distribution${q ? `?${q}` : ''}`)
+  },
+  subjects: (params: { domain?: string; min_level?: number; max_level?: number; search?: string }) => {
     const qs = new URLSearchParams()
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
@@ -163,6 +191,7 @@ export const api = {
     return get<{ subjects: Subject[] }>(`/subjects${q ? `?${q}` : ''}`)
   },
   subjectDetail: (id: string) => get<SubjectDetail>(`/subjects/${id}`),
-  subjectTrend: (id: string) => get<{ trend: MaturitySnapshot[] }>(`/subjects/${id}/trend`),
+  subjectTrend: (id: string, period: Period = 'week') =>
+    get<{ trend: MaturitySnapshot[] }>(`/subjects/${id}/trend?period=${period}`),
   agentQuery: (question: string) => post<AgentResponse>('/agent/query', { question }),
 }

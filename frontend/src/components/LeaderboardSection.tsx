@@ -9,21 +9,21 @@ import BusinessIcon from '@mui/icons-material/Business'
 import { api, type DomainTrendSummary, type SubjectTrendSummary, type OwnerTeamTrendSummary } from '../api/client'
 import { useStore } from '../state/store'
 import { domainColor, DOMAIN_ORDER, categorical, status } from '../theme/palette'
-import { getTier } from '../theme/badges'
+import { getLevelColor } from '../theme/badges'
 
 function DomainBadgeCard({
   d,
   mode,
-  maxScore,
+  maxLevel,
   onClick,
 }: {
   d: DomainTrendSummary
   mode: 'light' | 'dark'
-  maxScore: number
+  maxLevel: number
   onClick: () => void
 }) {
-  const tier = getTier(d.avg_maturity_score, maxScore)
-  const toGo = Math.max(0, maxScore - d.avg_maturity_score)
+  const rounded = Math.round(d.avg_maturity_level)
+  const toGo = Math.max(0, maxLevel - d.avg_maturity_level)
   return (
     <Card
       variant="outlined"
@@ -32,10 +32,10 @@ function DomainBadgeCard({
     >
       <CardContent>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-          <MilitaryTechIcon sx={{ fontSize: 22, color: tier.color }} />
+          <MilitaryTechIcon sx={{ fontSize: 22, color: getLevelColor(rounded) }} />
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-              {tier.label}
+              L{rounded}
             </Typography>
             <Stack direction="row" spacing={0.7} sx={{ alignItems: 'center' }}>
               <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: domainColor(d.domain, mode) }} />
@@ -45,7 +45,7 @@ function DomainBadgeCard({
         </Stack>
         <LinearProgress
           variant="determinate"
-          value={(d.avg_maturity_score / maxScore) * 100}
+          value={(d.avg_maturity_level / maxLevel) * 100}
           sx={{
             height: 6,
             borderRadius: 3,
@@ -55,7 +55,7 @@ function DomainBadgeCard({
           }}
         />
         <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-          {d.avg_maturity_score.toFixed(2)} / {maxScore} · 距離 {maxScore} 分還差 {toGo.toFixed(2)}
+          {d.avg_maturity_level.toFixed(2)} / L{maxLevel} · 距離 L{maxLevel} 還差 {toGo.toFixed(2)}
         </Typography>
       </CardContent>
     </Card>
@@ -65,24 +65,24 @@ function DomainBadgeCard({
 function TeamBadgeCard({
   t,
   mode,
-  maxScore,
+  maxLevel,
   onClick,
 }: {
   t: OwnerTeamTrendSummary
   mode: 'light' | 'dark'
-  maxScore: number
+  maxLevel: number
   onClick: () => void
 }) {
-  const tier = getTier(t.avg_maturity_score, maxScore)
-  const toGo = Math.max(0, maxScore - t.avg_maturity_score)
+  const rounded = Math.round(t.avg_maturity_level)
+  const toGo = Math.max(0, maxLevel - t.avg_maturity_level)
   return (
     <Card variant="outlined" onClick={onClick} sx={{ width: 200, flexShrink: 0, borderColor: 'divider', cursor: 'pointer' }}>
       <CardContent>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-          <MilitaryTechIcon sx={{ fontSize: 22, color: tier.color }} />
+          <MilitaryTechIcon sx={{ fontSize: 22, color: getLevelColor(rounded) }} />
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-              {tier.label}
+              L{rounded}
             </Typography>
             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
               <BusinessIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
@@ -94,7 +94,7 @@ function TeamBadgeCard({
         </Stack>
         <LinearProgress
           variant="determinate"
-          value={(t.avg_maturity_score / maxScore) * 100}
+          value={(t.avg_maturity_level / maxLevel) * 100}
           sx={{
             height: 6,
             borderRadius: 3,
@@ -104,7 +104,7 @@ function TeamBadgeCard({
           }}
         />
         <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-          {t.avg_maturity_score.toFixed(2)} / {maxScore} · 距離 {maxScore} 分還差 {toGo.toFixed(2)} · {t.subject_count} 個 subjects
+          {t.avg_maturity_level.toFixed(2)} / L{maxLevel} · 距離 L{maxLevel} 還差 {toGo.toFixed(2)} · {t.subject_count} 個 subjects
         </Typography>
       </CardContent>
     </Card>
@@ -114,15 +114,14 @@ function TeamBadgeCard({
 function SubjectBadgeCard({
   s,
   mode,
-  maxScore,
+  maxLevel,
   onClick,
 }: {
   s: SubjectTrendSummary
   mode: 'light' | 'dark'
-  maxScore: number
+  maxLevel: number
   onClick: () => void
 }) {
-  const tier = getTier(s.maturity_score, maxScore)
   return (
     <Card
       variant="outlined"
@@ -131,7 +130,7 @@ function SubjectBadgeCard({
     >
       <CardContent sx={{ p: 1.25, '&:last-child': { pb: 1.25 } }}>
         <Stack direction="row" spacing={0.6} sx={{ alignItems: 'center', mb: 0.4 }}>
-          <MilitaryTechIcon sx={{ fontSize: 16, color: tier.color }} />
+          <MilitaryTechIcon sx={{ fontSize: 16, color: getLevelColor(s.maturity_level) }} />
           <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: domainColor(s.domain, mode), flexShrink: 0 }} />
           <Typography variant="caption" color="text.secondary" noWrap>
             {s.domain}
@@ -142,7 +141,7 @@ function SubjectBadgeCard({
         </Typography>
         <LinearProgress
           variant="determinate"
-          value={(s.maturity_score / maxScore) * 100}
+          value={(s.maturity_level / maxLevel) * 100}
           sx={{
             height: 5,
             borderRadius: 3,
@@ -152,7 +151,7 @@ function SubjectBadgeCard({
           }}
         />
         <Typography variant="caption" color="text.secondary">
-          {s.maturity_score.toFixed(2)} / {maxScore}
+          L{s.maturity_level} / L{maxLevel}
         </Typography>
       </CardContent>
     </Card>
@@ -253,7 +252,7 @@ const SUBJECT_WALL_COLLAPSED_COUNT = 12
 
 export default function LeaderboardSection() {
   const mode = useStore((s) => s.mode)
-  const maxScore = useStore((s) => s.maxScore)
+  const maxLevel = useStore((s) => s.maxLevel)
   const setSelectedDomainDetail = useStore((s) => s.setSelectedDomainDetail)
   const setSelectedOwnerTeamDetail = useStore((s) => s.setSelectedOwnerTeamDetail)
   const setSelectedSubjectId = useStore((s) => s.setSelectedSubjectId)
@@ -268,13 +267,13 @@ export default function LeaderboardSection() {
     api.ownerTeamsTrendSummary().then((res) => setTeams(res.teams))
   }, [])
 
-  // alphabetical, not score order — same non-shaming principle as domains
+  // alphabetical, not level order — same non-shaming principle as domains
   const orderedTeams = useMemo(() => [...teams].sort((a, b) => a.team.localeCompare(b.team)), [teams])
 
   const weeklyTeamChampion = [...teams].filter((t) => t.wow_delta > 0).sort((a, b) => b.wow_delta - a.wow_delta)[0]
   const monthlyTeamChampion = [...teams].filter((t) => t.mom_delta > 0).sort((a, b) => b.mom_delta - a.mom_delta)[0]
 
-  // stable, identity-based order — never sorted by score, so no domain reads
+  // stable, identity-based order — never sorted by level, so no domain reads
   // as "ranked last"; the badge tier alone carries the relative standing
   const orderedDomains = DOMAIN_ORDER.map((name) => domains.find((d) => d.domain === name)).filter(
     (d): d is DomainTrendSummary => Boolean(d),
@@ -326,32 +325,32 @@ export default function LeaderboardSection() {
           <Typography variant="subtitle1">Leaderboard</Typography>
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          目標是每個部門跟 data subject 都逐步邁向 {maxScore} 分,徽章代表目前的等級,不代表名次高低。
+          目標是每個 Domain 跟 data subject 都逐步邁向 L{maxLevel},徽章代表目前的等級,不代表名次高低。
         </Typography>
 
         <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
           <ChampionCard
-            title="本週冠軍 · WoW 進步最多的部門"
+            title="本週冠軍 · WoW 進步最多的 Domain"
             name={weeklyChampion?.domain}
             delta={weeklyChampion?.wow_delta}
             emptyText="這週大家都持平,繼續加油!"
             onClick={() => weeklyChampion && setSelectedDomainDetail(weeklyChampion.domain)}
           />
           <ChampionCard
-            title="本月冠軍 · MoM 進步最多的部門"
+            title="本月冠軍 · MoM 進步最多的 Domain"
             name={monthlyChampion?.domain}
             delta={monthlyChampion?.mom_delta}
-            emptyText="這個月還沒有明顯進步的部門,一起加油!"
+            emptyText="這個月還沒有明顯進步的 Domain,一起加油!"
             onClick={() => monthlyChampion && setSelectedDomainDetail(monthlyChampion.domain)}
           />
         </Stack>
 
         <Typography variant="subtitle2" gutterBottom>
-          部門徽章
+          Domain 徽章
         </Typography>
         <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap', mb: 1 }}>
           {orderedDomains.map((d) => (
-            <DomainBadgeCard key={d.domain} d={d} mode={mode} maxScore={maxScore} onClick={() => setSelectedDomainDetail(d.domain)} />
+            <DomainBadgeCard key={d.domain} d={d} mode={mode} maxLevel={maxLevel} onClick={() => setSelectedDomainDetail(d.domain)} />
           ))}
         </Stack>
 
@@ -377,7 +376,7 @@ export default function LeaderboardSection() {
         </Typography>
         <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap', mb: 1 }}>
           {orderedTeams.map((t) => (
-            <TeamBadgeCard key={t.team} t={t} mode={mode} maxScore={maxScore} onClick={() => setSelectedOwnerTeamDetail(t.team)} />
+            <TeamBadgeCard key={t.team} t={t} mode={mode} maxLevel={maxLevel} onClick={() => setSelectedOwnerTeamDetail(t.team)} />
           ))}
         </Stack>
 
@@ -391,20 +390,20 @@ export default function LeaderboardSection() {
         </Stack>
         <Stack direction="row" spacing={1.25} useFlexGap sx={{ flexWrap: 'wrap', mb: 1 }}>
           {visibleSubjects.map((s) => (
-            <SubjectBadgeCard key={s.id} s={s} mode={mode} maxScore={maxScore} onClick={() => setSelectedSubjectId(s.id)} />
+            <SubjectBadgeCard key={s.id} s={s} mode={mode} maxLevel={maxLevel} onClick={() => setSelectedSubjectId(s.id)} />
           ))}
         </Stack>
 
         <SpotlightRow
           icon={<RocketLaunchIcon sx={{ fontSize: 18, color: categorical[mode][0] }} />}
-          title="本週最進步部門 Top 3"
+          title="本週最進步 Domain Top 3"
           emptyText="這週大家都持平,繼續加油!"
           items={topWeeklyDomains}
         />
         <SpotlightRow
           icon={<TrendingUpIcon sx={{ fontSize: 18, color: categorical[mode][0] }} />}
-          title="本月最進步部門 Top 3"
-          emptyText="這個月還沒有明顯進步的部門,一起加油!"
+          title="本月最進步 Domain Top 3"
+          emptyText="這個月還沒有明顯進步的 Domain,一起加油!"
           items={topMonthlyDomains}
         />
         <SpotlightRow

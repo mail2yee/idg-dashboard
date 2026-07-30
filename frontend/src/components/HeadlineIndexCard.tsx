@@ -9,7 +9,7 @@ import { chrome, categorical } from '../theme/palette'
 
 export default function HeadlineIndexCard() {
   const mode = useStore((s) => s.mode)
-  const maxScore = useStore((s) => s.maxScore)
+  const maxLevel = useStore((s) => s.maxLevel)
   const [latest, setLatest] = useState<OrgSnapshot | null>(null)
   const [trend, setTrend] = useState<OrgSnapshot[]>([])
 
@@ -75,7 +75,7 @@ export default function HeadlineIndexCard() {
           )}
         </Stack>
         <Typography variant="caption" color="text.secondary">
-          {latest ? `平均 maturity ${latest.avg_maturity_score.toFixed(2)} / ${maxScore} · ${latest.subject_count} data subjects` : ''}
+          {latest ? `平均 Level L${latest.avg_maturity_level.toFixed(1)} / L${maxLevel} · ${latest.subject_count} data subjects` : ''}
         </Typography>
         <Box sx={{ height: 48, mt: 1 }}>
           <ReactECharts option={sparklineOption} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} />

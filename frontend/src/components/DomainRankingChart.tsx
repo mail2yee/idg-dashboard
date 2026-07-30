@@ -8,7 +8,7 @@ import { baseAxis, tooltipStyle, FONT_FAMILY } from '../theme/echartsTheme'
 
 export default function DomainRankingChart() {
   const mode = useStore((s) => s.mode)
-  const maxScore = useStore((s) => s.maxScore)
+  const maxLevel = useStore((s) => s.maxLevel)
   const selectedDomain = useStore((s) => s.selectedDomain)
   const setSelectedDomain = useStore((s) => s.setSelectedDomain)
   const highlightedDomains = useStore((s) => s.highlightedDomains)
@@ -20,7 +20,7 @@ export default function DomainRankingChart() {
 
   const c = chrome[mode]
   // ascending for horizontal bar so the highest score renders at the top
-  const sorted = [...domains].sort((a, b) => a.avg_maturity_score - b.avg_maturity_score)
+  const sorted = [...domains].sort((a, b) => a.avg_maturity_level - b.avg_maturity_level)
   const hasFocus = Boolean(selectedDomain) || highlightedDomains.length > 0
 
   const option = {
@@ -32,10 +32,10 @@ export default function DomainRankingChart() {
       ...tooltipStyle(mode),
       formatter: (params: { name: string; value: number }[]) => {
         const d = sorted.find((x) => x.domain === params[0].name)
-        return `${params[0].name}: ${params[0].value} / ${maxScore}<br/>WoW ${d ? (d.wow_delta >= 0 ? '+' : '') + d.wow_delta.toFixed(2) : ''}`
+        return `${params[0].name}: L${params[0].value} / L${maxLevel}<br/>WoW ${d ? (d.wow_delta >= 0 ? '+' : '') + d.wow_delta.toFixed(2) : ''}`
       },
     },
-    xAxis: { type: 'value', min: 0, max: maxScore, ...baseAxis(mode) },
+    xAxis: { type: 'value', min: 0, max: maxLevel, ...baseAxis(mode) },
     yAxis: {
       type: 'category',
       data: sorted.map((d) => d.domain),
@@ -50,7 +50,7 @@ export default function DomainRankingChart() {
         data: sorted.map((d) => {
           const isFocused = highlightedDomains.includes(d.domain!) || selectedDomain === d.domain
           return {
-            value: d.avg_maturity_score,
+            value: d.avg_maturity_level,
             itemStyle: {
               color: domainColor(d.domain!, mode),
               opacity: hasFocus ? (isFocused ? 1 : 0.3) : 1,
@@ -62,7 +62,7 @@ export default function DomainRankingChart() {
         label: {
           show: true,
           position: 'right',
-          formatter: '{c}',
+          formatter: 'L{c}',
           color: c.textSecondary,
           fontSize: 12,
           fontFamily: FONT_FAMILY,
@@ -75,7 +75,7 @@ export default function DomainRankingChart() {
     <Card>
       <CardContent>
         <Typography variant="subtitle2" gutterBottom>
-          部門 Maturity 排名
+          Domain Maturity 排名
         </Typography>
         <Box sx={{ height: 260 }}>
           <ReactECharts

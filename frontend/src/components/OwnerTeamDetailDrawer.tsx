@@ -6,12 +6,12 @@ import ReactECharts from 'echarts-for-react'
 import { api, type OwnerTeamDetail } from '../api/client'
 import { useStore } from '../state/store'
 import { chrome, categorical, domainColor } from '../theme/palette'
-import { baseAxis, tooltipStyle } from '../theme/echartsTheme'
+import { baseAxis, tooltipStyle, formatWeekLabel } from '../theme/echartsTheme'
 import DeltaBadge from './DeltaBadge'
 
 export default function OwnerTeamDetailDrawer() {
   const mode = useStore((s) => s.mode)
-  const maxScore = useStore((s) => s.maxScore)
+  const maxLevel = useStore((s) => s.maxLevel)
   const dimensionLabels = useStore((s) => s.dimensions)
   const selectedOwnerTeamDetail = useStore((s) => s.selectedOwnerTeamDetail)
   const setSelectedOwnerTeamDetail = useStore((s) => s.setSelectedOwnerTeamDetail)
@@ -35,15 +35,15 @@ export default function OwnerTeamDetailDrawer() {
     tooltip: { trigger: 'axis', ...tooltipStyle(mode) },
     xAxis: {
       type: 'category',
-      data: detail.series.map((t) => t.date.slice(5, 10)),
+      data: detail.series.map((t) => formatWeekLabel(t.date)),
       ...baseAxis(mode),
       splitLine: { show: false },
     },
-    yAxis: { type: 'value', min: 0, max: maxScore, ...baseAxis(mode) },
+    yAxis: { type: 'value', min: 0, max: maxLevel, ...baseAxis(mode) },
     series: [
       {
         type: 'line',
-        data: detail.series.map((t) => t.score),
+        data: detail.series.map((t) => t.level),
         lineStyle: { width: 2, color: accent },
         itemStyle: { color: accent, borderColor: c.surface, borderWidth: 2 },
         showSymbol: true,
@@ -73,7 +73,7 @@ export default function OwnerTeamDetailDrawer() {
 
             <Stack direction="row" spacing={3} sx={{ mt: 1.5, alignItems: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                目前 {detail.avg_maturity_score.toFixed(2)} / {maxScore}
+                目前 {detail.avg_maturity_level.toFixed(2)} / L{maxLevel}
               </Typography>
               <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                 <Typography variant="caption" color="text.secondary">
@@ -101,7 +101,7 @@ export default function OwnerTeamDetailDrawer() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="subtitle2" gutterBottom>
-              旗下 subjects 平均 {maxScore} 分制拆解
+              旗下 subjects 平均 KPI 拆解(構成 Maturity Level 的底層指標)
             </Typography>
             <Stack spacing={1.2}>
               {Object.entries(detail.avg_sub_scores).map(([key, value]) => (
@@ -160,7 +160,7 @@ export default function OwnerTeamDetailDrawer() {
                     </Stack>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       <Typography variant="body2" color="text.secondary">
-                        {s.maturity_score.toFixed(2)}
+                        L{s.maturity_level}
                       </Typography>
                       <DeltaBadge value={s.wow_delta} mode={mode} />
                     </Stack>

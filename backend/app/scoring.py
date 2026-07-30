@@ -1,12 +1,21 @@
 """
 Config-driven maturity scoring engine.
 
-The 5(+N) dimensions that sum into a subject's maturity score are NOT
-hardcoded in Python — they're declared in config/maturity_dimensions.json.
-Adding a new dimension (e.g. "Ownership coverage") means adding one entry to
-that file; nothing here or in the routers needs to change, as long as the
-raw signal it references already exists in the scoring context built in
-seed.py's build_scoring_context().
+Two independent, config-driven metrics live here:
+
+1. Dimensions (config's `dimensions` array) — continuous 0-1 scores per KPI
+   (API/Metadata/Lineage/Alerting/Freshness), used by the KPI heatmap and
+   the per-KPI breakdown in detail drawers. compute_dimension_scores().
+
+2. Maturity Level (config's `maturity_levels` array) — the headline metric,
+   a cumulative L1-L5 ladder: a subject only reaches level N if it also
+   satisfies every level below N. compute_maturity_level().
+
+Neither is hardcoded in Python — both are declared in
+config/maturity_dimensions.json. Adding a dimension or a level means adding
+one entry to that file; nothing here or in the routers needs to change, as
+long as the raw signal it references already exists in the scoring context
+built in seed.py's build_scoring_context().
 
 Supported rule types:
   - boolean_field:    context[field] truthy -> 1.0 else 0.0
@@ -28,6 +37,12 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "maturity_dime
 def load_dimensions_config():
     with open(CONFIG_PATH) as f:
         return json.load(f)["dimensions"]
+
+
+@lru_cache(maxsize=1)
+def load_levels_config():
+    with open(CONFIG_PATH) as f:
+        return sorted(json.load(f)["maturity_levels"], key=lambda x: x["level"])
 
 
 def _coerce(value):
@@ -95,3 +110,40 @@ def dimension_keys() -> list:
 
 def max_score() -> float:
     return sum(d.get("weight", 1.0) for d in load_dimensions_config())
+
+
+def compute_maturity_level(context: dict) -> int:
+    """Cumulative ladder (config/maturity_dimensions.json's `maturity_levels`,
+    evaluated in order): a subject only gets credit for level N if it also
+    satisfies every level before N. Stops at the first failed rule — this is
+    deliberately NOT "count how many pass", it's "how far up the ladder
+    before the first gap".
+
+    The reported level is floored at the lowest configured rung (L1) — there
+    is no "L0"/unrated state. A subject that fails even the L1 rule still
+    reports as L1; L1 is the floor everyone starts from, not itself a gate."""
+    levels = load_levels_config()
+    floor = levels[0]["level"] if levels else 0
+    level = floor
+    for entry in levels:
+        if _eval_rule(entry["rule"], context) >= 1.0:
+            level = entry["level"]
+        else:
+            break
+    return level
+
+
+def min_level() -> int:
+    levels = load_levels_config()
+    return levels[0]["level"] if levels else 0
+
+
+def level_meta() -> list:
+    return [
+        {"level": d["level"], "label": d["label"], "description": d.get("description")}
+        for d in load_levels_config()
+    ]
+
+
+def max_level() -> int:
+    return max((d["level"] for d in load_levels_config()), default=0)

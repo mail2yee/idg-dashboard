@@ -3,29 +3,21 @@ import ReactECharts from 'echarts-for-react'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useStore } from '../state/store'
-import { chrome, categorical } from '../theme/palette'
+import { chrome } from '../theme/palette'
+import { getLevelColor } from '../theme/badges'
 import { baseAxis, tooltipStyle, FONT_FAMILY } from '../theme/echartsTheme'
-
-// bucket ranges come straight from the "N-N+1" label the backend computes
-// off config/maturity_dimensions.json's total weight — no fixed 5-bucket
-// assumption here, so an added dimension just grows the bucket count.
-function rangeToMinMax(range: string): [number, number] {
-  const [min, max] = range.split('-').map(Number)
-  return [min, max]
-}
 
 export default function MaturityDistributionChart() {
   const mode = useStore((s) => s.mode)
-  const scoreRange = useStore((s) => s.scoreRange)
-  const setScoreRange = useStore((s) => s.setScoreRange)
-  const [buckets, setBuckets] = useState<{ range: string; count: number }[]>([])
+  const levelRange = useStore((s) => s.levelRange)
+  const setLevelRange = useStore((s) => s.setLevelRange)
+  const [levels, setLevels] = useState<{ level: number; count: number }[]>([])
 
   useEffect(() => {
-    api.maturityDistribution().then((res) => setBuckets(res.buckets))
+    api.maturityDistribution().then((res) => setLevels(res.levels))
   }, [])
 
   const c = chrome[mode]
-  const accent = categorical[mode][0]
 
   const option = {
     animation: false,
@@ -34,11 +26,11 @@ export default function MaturityDistributionChart() {
       trigger: 'axis',
       axisPointer: { type: 'none' },
       ...tooltipStyle(mode),
-      formatter: (params: { name: string; value: number }[]) => `${params[0].name} 分: ${params[0].value} 個 subjects`,
+      formatter: (params: { name: string; value: number }[]) => `${params[0].name}: ${params[0].value} 個 subjects`,
     },
     xAxis: {
       type: 'category',
-      data: buckets.map((b) => b.range),
+      data: levels.map((l) => `L${l.level}`),
       ...baseAxis(mode),
       splitLine: { show: false },
     },
@@ -49,14 +41,13 @@ export default function MaturityDistributionChart() {
     series: [
       {
         type: 'bar',
-        data: buckets.map((b) => {
-          const range = rangeToMinMax(b.range)
-          const isSelected = scoreRange && range[0] === scoreRange[0]
+        data: levels.map((l) => {
+          const isSelected = levelRange && l.level === levelRange[0]
           return {
-            value: b.count,
+            value: l.count,
             itemStyle: {
-              color: accent,
-              opacity: scoreRange ? (isSelected ? 1 : 0.35) : 1,
+              color: getLevelColor(l.level),
+              opacity: levelRange ? (isSelected ? 1 : 0.35) : 1,
               borderRadius: [4, 4, 0, 0],
             },
           }
@@ -77,7 +68,7 @@ export default function MaturityDistributionChart() {
     <Card>
       <CardContent>
         <Typography variant="subtitle2" gutterBottom>
-          Maturity Score 分佈
+          Maturity Level 分佈
         </Typography>
         <Box sx={{ height: 220 }}>
           <ReactECharts
@@ -86,9 +77,9 @@ export default function MaturityDistributionChart() {
             opts={{ renderer: 'svg' }}
             onEvents={{
               click: (params: { dataIndex: number }) => {
-                const range = rangeToMinMax(buckets[params.dataIndex].range)
-                const isSame = scoreRange && range[0] === scoreRange[0]
-                setScoreRange(isSame ? null : range)
+                const level = levels[params.dataIndex].level
+                const isSame = levelRange && level === levelRange[0]
+                setLevelRange(isSame ? null : [level, level])
               },
             }}
           />

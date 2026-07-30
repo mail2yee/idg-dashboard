@@ -42,7 +42,7 @@ export default function KpiBreakdownPage() {
             各 KPI 全公司平均
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            這 {dims.length} 個面向加總構成 maturity score(滿分 {dims.reduce((a, d) => a + d.weight, 0)} 分),這裡單獨看每個面向目前大家的狀況。
+            這 {dims.length} 個面向是構成 Maturity Level(L1-L5)的底層 KPI,這裡單獨看每個面向目前大家的狀況,跟總覽頁的 Level 是兩個互補的視角。
           </Typography>
           <Grid container spacing={2}>
             {dims.map((d) => (
@@ -70,14 +70,14 @@ export default function KpiBreakdownPage() {
       <Card>
         <CardContent>
           <Stack direction="row" spacing={2} sx={{ mb: 1, alignItems: 'center' }}>
-            <Typography variant="subtitle1">KPI 拆解 — {scope === 'domain' ? '依部門' : '依 Data Subject'}</Typography>
+            <Typography variant="subtitle1">KPI 拆解 — {scope === 'domain' ? '依 Domain' : '依 Data Subject'}</Typography>
             <ToggleButtonGroup size="small" value={scope} exclusive onChange={(_, v) => v && setScope(v)}>
-              <ToggleButton value="domain">依部門</ToggleButton>
+              <ToggleButton value="domain">依 Domain</ToggleButton>
               <ToggleButton value="subject">依 Data Subject</ToggleButton>
             </ToggleButtonGroup>
           </Stack>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-            顏色越深代表該面向分數越高,可以直接比較同一欄(同一個 KPI)在不同{scope === 'domain' ? '部門' : 'data subject'}的狀況。點一列可以看詳細狀況。
+            顏色越深代表該面向分數越高,可以直接比較同一欄(同一個 KPI)在不同{scope === 'domain' ? 'Domain' : 'data subject'}的狀況。點一列可以看詳細狀況。
           </Typography>
           <DimensionHeatmap
             rows={rows}

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException
 
 from app.db import db
-from app.scoring import dimension_keys
-from app.util import serialize
+from app.scoring import dimension_keys, max_level, min_level
+from app.util import compute_deltas, period_delta, period_window, serialize
 
 router = APIRouter()
 
@@ -17,31 +17,59 @@ async def domains_ranking():
     latest_date = latest_doc["snapshot_date"]
     cursor = db.org_quality_index_snapshots.find(
         {"scope_type": "DOMAIN", "snapshot_date": latest_date}
-    ).sort("avg_maturity_score", -1)
+    ).sort("avg_maturity_level", -1)
     docs = await cursor.to_list(length=None)
     return {"domains": serialize(docs)}
 
 
 @router.get("/domains/trend-summary")
-async def domains_trend_summary():
-    """Per-domain WoW/MoM deltas + an 8-week score series, for the Trends view."""
+async def domains_trend_summary(period: str = "week"):
+    """Per-domain WoW/MoM/YoY deltas + a period-windowed level series."""
     docs = await db.org_quality_index_snapshots.find({"scope_type": "DOMAIN"}).sort("snapshot_date", 1).to_list(length=None)
     by_domain: dict = {}
     for d in docs:
         by_domain.setdefault(d["domain"], []).append(d)
 
+    window = period_window(period)
     results = []
     for domain, series in by_domain.items():
-        latest = series[-1]
+        levels = [s["avg_maturity_level"] for s in series]
+        deltas = compute_deltas(levels)
         results.append({
             "domain": domain,
-            "avg_maturity_score": latest["avg_maturity_score"],
-            "wow_delta": latest["wow_delta"],
-            "mom_delta": latest["mom_delta"],
-            "series": [s["avg_maturity_score"] for s in series],
+            "avg_maturity_level": levels[-1],
+            **deltas,
+            "delta": period_delta(deltas, period),
+            "series": levels[-window:],
         })
-    results.sort(key=lambda x: -x["avg_maturity_score"])
+    results.sort(key=lambda x: -x["avg_maturity_level"])
     return {"domains": results}
+
+
+@router.get("/domains/level-distribution")
+async def domains_level_distribution(period: str = "week"):
+    """For the Trends page's big chart: how many domains sit at each
+    (rounded) Maturity Level at each snapshot date in the selected period's
+    window. A domain's own level is fractional (an average across its
+    subjects), so it's rounded to the nearest whole rung for this count."""
+    docs = await db.org_quality_index_snapshots.find({"scope_type": "DOMAIN"}).sort("snapshot_date", 1).to_list(length=None)
+    by_date: dict = {}
+    for d in docs:
+        by_date.setdefault(d["snapshot_date"], []).append(d["avg_maturity_level"])
+
+    dates = sorted(by_date.keys())[-period_window(period):]
+    bottom, top = min_level(), max_level()
+
+    series = {str(lvl): [] for lvl in range(bottom, top + 1)}
+    for date in dates:
+        counts = {lvl: 0 for lvl in range(bottom, top + 1)}
+        for val in by_date[date]:
+            rounded = max(bottom, min(top, round(val)))
+            counts[rounded] += 1
+        for lvl in range(bottom, top + 1):
+            series[str(lvl)].append(counts[lvl])
+
+    return {"dates": [serialize(d) for d in dates], "series": series, "min_level": bottom, "max_level": top}
 
 
 @router.get("/domains/dimension-breakdown")
@@ -79,15 +107,17 @@ async def domains_dimension_breakdown():
 
 
 @router.get("/domains/{domain}/detail")
-async def domain_detail(domain: str):
-    """Drill-down for the Trends view: score history, dimension breakdown,
+async def domain_detail(domain: str, period: str = "week"):
+    """Drill-down for the Trends view: level history, dimension breakdown,
     and every subject in the domain with its own WoW delta."""
     docs = await db.org_quality_index_snapshots.find(
         {"scope_type": "DOMAIN", "domain": domain}
     ).sort("snapshot_date", 1).to_list(length=None)
     if not docs:
         raise HTTPException(status_code=404, detail="domain not found")
-    latest = docs[-1]
+    levels = [d["avg_maturity_level"] for d in docs]
+    deltas = compute_deltas(levels)
+    window = period_window(period)
 
     subjects = await db.data_subjects.find({"domain": domain}).to_list(length=None)
     subject_ids = [s["_id"] for s in subjects]
@@ -106,28 +136,27 @@ async def domain_detail(domain: str):
         series = by_subject.get(s["_id"], [])
         if not series:
             continue
-        latest_snap = series[-1]
-        prev_week = series[-2] if len(series) >= 2 else None
-        wow = round(latest_snap["maturity_score"] - prev_week["maturity_score"], 2) if prev_week else 0.0
+        subject_levels = [sn["maturity_level"] for sn in series]
+        subject_deltas = compute_deltas(subject_levels)
         subject_rows.append({
             "id": str(s["_id"]),
             "name": s["name"],
-            "maturity_score": latest_snap["maturity_score"],
-            "wow_delta": wow,
+            "maturity_level": subject_levels[-1],
+            "wow_delta": subject_deltas["wow_delta"],
         })
         for d in dims:
-            sub_score_sums[d] += latest_snap["sub_scores"].get(d, 0)
+            sub_score_sums[d] += series[-1]["sub_scores"].get(d, 0)
         n += 1
 
     avg_sub_scores = {d: round(v / n, 2) for d, v in sub_score_sums.items()} if n else {}
-    subject_rows.sort(key=lambda x: -x["maturity_score"])
+    subject_rows.sort(key=lambda x: -x["maturity_level"])
 
     return serialize({
         "domain": domain,
-        "avg_maturity_score": latest["avg_maturity_score"],
-        "wow_delta": latest["wow_delta"],
-        "mom_delta": latest["mom_delta"],
-        "series": [{"date": d["snapshot_date"], "score": d["avg_maturity_score"]} for d in docs],
+        "avg_maturity_level": levels[-1],
+        **deltas,
+        "delta": period_delta(deltas, period),
+        "series": [{"date": d["snapshot_date"], "level": lvl} for d, lvl in zip(docs[-window:], levels[-window:])],
         "avg_sub_scores": avg_sub_scores,
         "subjects": subject_rows,
     })

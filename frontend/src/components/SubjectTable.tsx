@@ -4,12 +4,13 @@ import { DataGrid, type GridColDef } from '@mui/x-data-grid'
 import { api, type Subject } from '../api/client'
 import { useStore } from '../state/store'
 import { domainColor } from '../theme/palette'
+import { getLevelColor } from '../theme/badges'
 
 export default function SubjectTable() {
   const mode = useStore((s) => s.mode)
-  const maxScore = useStore((s) => s.maxScore)
+  const maxLevel = useStore((s) => s.maxLevel)
   const selectedDomain = useStore((s) => s.selectedDomain)
-  const scoreRange = useStore((s) => s.scoreRange)
+  const levelRange = useStore((s) => s.levelRange)
   const search = useStore((s) => s.search)
   const setSearch = useStore((s) => s.setSearch)
   const highlightedSubjectIds = useStore((s) => s.highlightedSubjectIds)
@@ -22,13 +23,13 @@ export default function SubjectTable() {
     api
       .subjects({
         domain: selectedDomain ?? undefined,
-        min_score: scoreRange?.[0],
-        max_score: scoreRange?.[1],
+        min_level: levelRange?.[0],
+        max_level: levelRange?.[1],
         search: search || undefined,
       })
       .then((res) => setSubjects(res.subjects))
       .finally(() => setLoading(false))
-  }, [selectedDomain, scoreRange, search])
+  }, [selectedDomain, levelRange, search])
 
   const columns: GridColDef<Subject>[] = [
     {
@@ -59,25 +60,24 @@ export default function SubjectTable() {
     },
     { field: 'platform', headerName: 'Platform', flex: 0.7 },
     {
-      field: 'maturity_score',
-      headerName: 'Maturity',
+      field: 'maturity_level',
+      headerName: 'Maturity Level',
       flex: 0.9,
       renderCell: (params) => {
-        const score = params.value as number | null
+        const level = params.value as number | null
         return (
           <Stack direction="row" spacing={1} sx={{ width: '100%', alignItems: 'center' }}>
             <Box sx={{ flex: 1, height: 6, borderRadius: 3, bgcolor: 'action.hover', overflow: 'hidden' }}>
               <Box
                 sx={{
-                  width: `${((score ?? 0) / maxScore) * 100}%`,
+                  width: `${((level ?? 0) / maxLevel) * 100}%`,
                   height: '100%',
-                  bgcolor:
-                    (score ?? 0) >= maxScore * 0.8 ? '#0ca30c' : (score ?? 0) >= maxScore * 0.5 ? '#fab219' : '#d03b3b',
+                  bgcolor: getLevelColor(level ?? 0),
                 }}
               />
             </Box>
-            <Typography variant="caption" sx={{ minWidth: 28 }}>
-              {score?.toFixed(1) ?? '—'}
+            <Typography variant="caption" sx={{ minWidth: 24 }}>
+              {level !== null && level !== undefined ? `L${level}` : '—'}
             </Typography>
           </Stack>
         )

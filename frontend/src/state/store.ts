@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { Mode } from '../theme/palette'
-import type { DimensionMeta } from '../api/client'
+import type { DimensionMeta, LevelMeta } from '../api/client'
 
 interface ChatMessage {
   role: 'user' | 'agent'
@@ -11,24 +11,30 @@ interface DashboardState {
   mode: Mode
   toggleMode: () => void
 
-  // maturity dimension config — fetched once at startup from
-  // /api/config/dimensions, which reads config/maturity_dimensions.json on
-  // the backend. Components read from here instead of hardcoding the 5
-  // dimension keys, so adding a dimension in that config file needs no
-  // frontend code change either.
+  // maturity DIMENSION config (KPI heatmap / breakdown drawers) — fetched
+  // once at startup from /api/config/dimensions. Independent of Level below.
   dimensions: DimensionMeta[]
   maxScore: number
   setDimensionConfig: (dimensions: DimensionMeta[], maxScore: number) => void
 
+  // maturity LEVEL config (L1-L5 headline ladder) — fetched once at startup
+  // from /api/config/levels, which reads config/maturity_dimensions.json's
+  // `maturity_levels` on the backend. Components read from here instead of
+  // hardcoding "5", so adding a level in that config needs no frontend
+  // code change either.
+  levels: LevelMeta[]
+  maxLevel: number
+  setLevelConfig: (levels: LevelMeta[], maxLevel: number) => void
+
   // cross-filter state, driven by chart clicks and by the AI agent
   selectedDomain: string | null
-  scoreRange: [number, number] | null
+  levelRange: [number, number] | null
   highlightedDomains: string[]
   highlightedSubjectIds: string[]
   search: string
 
   setSelectedDomain: (d: string | null) => void
-  setScoreRange: (r: [number, number] | null) => void
+  setLevelRange: (r: [number, number] | null) => void
   setHighlightedDomains: (d: string[]) => void
   setHighlightedSubjectIds: (ids: string[]) => void
   setSearch: (s: string) => void
@@ -60,19 +66,23 @@ export const useStore = create<DashboardState>((set) => ({
   maxScore: 5,
   setDimensionConfig: (dimensions, maxScore) => set({ dimensions, maxScore }),
 
+  levels: [],
+  maxLevel: 5,
+  setLevelConfig: (levels, maxLevel) => set({ levels, maxLevel }),
+
   selectedDomain: null,
-  scoreRange: null,
+  levelRange: null,
   highlightedDomains: [],
   highlightedSubjectIds: [],
   search: '',
 
   setSelectedDomain: (d) => set((s) => ({ selectedDomain: s.selectedDomain === d ? null : d })),
-  setScoreRange: (r) => set({ scoreRange: r }),
+  setLevelRange: (r) => set({ levelRange: r }),
   setHighlightedDomains: (d) => set({ highlightedDomains: d }),
   setHighlightedSubjectIds: (ids) => set({ highlightedSubjectIds: ids }),
   setSearch: (s) => set({ search: s }),
   clearFilters: () =>
-    set({ selectedDomain: null, scoreRange: null, highlightedDomains: [], highlightedSubjectIds: [], search: '' }),
+    set({ selectedDomain: null, levelRange: null, highlightedDomains: [], highlightedSubjectIds: [], search: '' }),
 
   selectedSubjectId: null,
   setSelectedSubjectId: (id) => set({ selectedSubjectId: id }),

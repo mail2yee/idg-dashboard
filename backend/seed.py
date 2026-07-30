@@ -14,7 +14,7 @@ from bson import ObjectId
 from faker import Faker
 from pymongo import MongoClient
 
-from app.scoring import compute_dimension_scores, max_score
+from app.scoring import compute_dimension_scores, compute_maturity_level, max_level, min_level
 
 MONGO_URL = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
 DB_NAME = os.environ.get("MONGO_DB", "idg_dashboard")
@@ -30,7 +30,7 @@ NATIVE_TYPES = ["STRING", "INT64", "FLOAT64", "BOOLEAN", "TIMESTAMP", "ARRAY", "
 ASSERTION_TYPES = ["FRESHNESS", "VOLUME", "SCHEMA", "COLUMN", "SQL"]
 INCIDENT_CATEGORIES = ["Data Quality", "Pipeline Failure", "Schema Change", "Access Issue"]
 TABLE_PREFIXES = ["fact", "dim", "stg", "agg", "raw"]
-SNAPSHOT_WEEKS = 8
+SNAPSHOT_WEEKS = 52  # a full year of weekly snapshots, so week/month/year trend views all have real data
 SUBJECTS_PER_DOMAIN = 7
 
 # IT ownership sits with one shared platform team; Data Owner/Steward sit
@@ -243,6 +243,7 @@ def build_scoring_context(subject, schema_fields, lineage_edges, assertions):
     field_description_coverage = with_desc / len(schema_fields) if schema_fields else 0
     return {
         "has_api": subject["_has_api"],
+        "has_description": bool(subject["description"]),
         "field_description_coverage": field_description_coverage,
         "has_owner": any(o["role"] == "DATA_OWNER" for o in subject["owners"]),
         "has_domain": True,  # all subjects are assigned a domain in this seed set
@@ -253,35 +254,39 @@ def build_scoring_context(subject, schema_fields, lineage_edges, assertions):
     }
 
 
-def build_maturity_snapshots(subject, latest_sub_scores, assertions, incidents, usage_stats):
-    latest_total = round(sum(latest_sub_scores.values()), 2)
-    snapshots = []
+def build_maturity_snapshots(subject, context, sub_scores, assertions, incidents, usage_stats):
+    """Maturity Level (L1-L5, cumulative ladder — no L0, L1 is the floor) is
+    the headline metric per snapshot; `sub_scores` (the continuous per-KPI
+    dimension values used by the heatmap/breakdown views) only ever gets
+    read from the *latest* snapshot by every consumer, so it's stored
+    unchanged across historical weeks rather than re-derived — only the
+    level needs a plausible history.
+    """
+    latest_level = compute_maturity_level(context)
+    top, bottom = max_level(), min_level()
 
-    # walk backward from latest score with a small random drift, clipped to [0, max_score]
-    top = max_score()
-    score = latest_total
-    scores_by_week = [None] * SNAPSHOT_WEEKS
-    scores_by_week[0] = latest_total
+    # walk backward from the real latest level: mostly flat, small chance of
+    # a +/-1 step most weeks, so a year of history reads as "slow drift with
+    # occasional level-ups/downs" rather than a random walk on 5 raw signals
+    levels_by_week = [None] * SNAPSHOT_WEEKS
+    levels_by_week[0] = latest_level
     for w in range(1, SNAPSHOT_WEEKS):
-        drift = random.uniform(-0.35, 0.35)
-        score = min(top, max(0.0, scores_by_week[w - 1] - drift))
-        scores_by_week[w] = round(score, 2)
+        r = random.random()
+        step = -1 if r < 0.08 else (1 if r < 0.16 else 0)
+        levels_by_week[w] = min(top, max(bottom, levels_by_week[w - 1] + step))
 
     open_incidents = sum(1 for i in incidents if i["status"] == "ACTIVE")
     pass_rates = [a["pass_rate_7d"] for a in assertions if a["pass_rate_7d"] is not None]
     assertion_pass_rate = round(sum(pass_rates) / len(pass_rates), 2) if pass_rates else None
     usage_30d = sum(u["query_count"] for u in usage_stats)
 
+    snapshots = []
     for w in range(SNAPSHOT_WEEKS):
-        total = scores_by_week[w]
-        # scale sub-scores proportionally to the walked total so history looks coherent
-        scale = total / latest_total if latest_total > 0 else 0
-        sub_scores = {k: round(min(1.0, v * scale), 2) for k, v in latest_sub_scores.items()}
         snapshots.append({
             "_id": ObjectId(),
             "subject_id": subject["_id"],
             "snapshot_date": week_start(w),
-            "maturity_score": total,
+            "maturity_level": levels_by_week[w],
             "sub_scores": sub_scores,
             "kpis": {
                 "description_coverage_field": sub_scores["metadata"],
@@ -304,45 +309,48 @@ def build_org_snapshots(subjects_by_domain, maturity_by_subject):
     org_snapshots = []
     for w in range(SNAPSHOT_WEEKS):
         snapshot_date = week_start(w)
-        global_scores = []
+        global_levels = []
         for domain, subs in subjects_by_domain.items():
-            domain_scores = [maturity_by_subject[s["_id"]][w]["maturity_score"] for s in subs]
-            global_scores.extend(domain_scores)
-            avg = round(sum(domain_scores) / len(domain_scores), 2) if domain_scores else 0
+            domain_levels = [maturity_by_subject[s["_id"]][w]["maturity_level"] for s in subs]
+            global_levels.extend(domain_levels)
+            avg = round(sum(domain_levels) / len(domain_levels), 2) if domain_levels else 0
             org_snapshots.append({
                 "_id": ObjectId(),
                 "scope_type": "DOMAIN",
                 "scope_id": subs[0]["domain_urn"] if subs else None,
                 "domain": domain,
                 "snapshot_date": snapshot_date,
-                "avg_maturity_score": avg,
+                "avg_maturity_level": avg,
                 "subject_count": len(subs),
             })
-        avg_global = round(sum(global_scores) / len(global_scores), 2) if global_scores else 0
+        avg_global = round(sum(global_levels) / len(global_levels), 2) if global_levels else 0
         org_snapshots.append({
             "_id": ObjectId(),
             "scope_type": "GLOBAL",
             "scope_id": None,
             "domain": None,
             "snapshot_date": snapshot_date,
-            "avg_maturity_score": avg_global,
-            "subject_count": len(global_scores),
+            "avg_maturity_level": avg_global,
+            "subject_count": len(global_levels),
         })
 
-    # now compute data_quality_index + wow/mom deltas per (scope_type, scope_id) series
+    # now compute data_quality_index + wow/mom/yoy deltas per (scope_type, scope_id) series
     def key(doc):
         return (doc["scope_type"], doc["scope_id"])
 
     series = {}
     for doc in org_snapshots:
         series.setdefault(key(doc), []).append(doc)
+    top = max_level()
     for docs in series.values():
         docs.sort(key=lambda d: d["snapshot_date"])
         for i, doc in enumerate(docs):
-            doc["data_quality_index"] = round(doc["avg_maturity_score"] / max_score() * 100, 1)
-            doc["wow_delta"] = round(doc["avg_maturity_score"] - docs[i - 1]["avg_maturity_score"], 2) if i > 0 else 0.0
-            ref = i - 4 if i - 4 >= 0 else 0
-            doc["mom_delta"] = round(doc["avg_maturity_score"] - docs[ref]["avg_maturity_score"], 2) if i > 0 else 0.0
+            doc["data_quality_index"] = round(doc["avg_maturity_level"] / top * 100, 1)
+            doc["wow_delta"] = round(doc["avg_maturity_level"] - docs[i - 1]["avg_maturity_level"], 2) if i > 0 else 0.0
+            mom_ref = i - 4 if i - 4 >= 0 else 0
+            doc["mom_delta"] = round(doc["avg_maturity_level"] - docs[mom_ref]["avg_maturity_level"], 2) if i > 0 else 0.0
+            yoy_ref = i - 52 if i - 52 >= 0 else 0
+            doc["yoy_delta"] = round(doc["avg_maturity_level"] - docs[yoy_ref]["avg_maturity_level"], 2) if i > 0 else 0.0
 
     return org_snapshots
 
@@ -388,7 +396,7 @@ def main():
 
         context = build_scoring_context(s, fields, edges, assertions)
         sub_scores = compute_dimension_scores(context)
-        snapshots = build_maturity_snapshots(s, sub_scores, assertions, incidents, usage)
+        snapshots = build_maturity_snapshots(s, context, sub_scores, assertions, incidents, usage)
 
         all_schema_fields.extend(fields)
         all_lineage_edges.extend(edges)
