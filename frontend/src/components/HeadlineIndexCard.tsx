@@ -23,6 +23,10 @@ export default function HeadlineIndexCard() {
   const c = chrome[mode]
   const accent = categorical[mode][0]
   const isUp = (latest?.wow_delta ?? 0) >= 0
+  // wow_delta is a Level delta (e.g. 0.02 out of maxLevel) -- convert to the
+  // same 0-100 scale as data_quality_index so the two numbers next to each
+  // other share a unit, instead of showing a Level delta beside a % score.
+  const deltaPts = ((latest?.wow_delta ?? 0) / maxLevel) * 100
 
   const sparklineOption = {
     animation: false,
@@ -59,7 +63,7 @@ export default function HeadlineIndexCard() {
         </Typography>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'baseline' }}>
           <Typography sx={{ fontSize: 48, fontWeight: 600, lineHeight: 1 }}>
-            {latest ? latest.data_quality_index.toFixed(1) : '—'}
+            {latest ? `${latest.data_quality_index.toFixed(1)}%` : '—'}
           </Typography>
           {latest && (
             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
@@ -69,13 +73,16 @@ export default function HeadlineIndexCard() {
                 <ArrowDownwardIcon sx={{ fontSize: 16, color: '#d03b3b' }} />
               )}
               <Typography variant="body2" sx={{ color: isUp ? c.successText : '#d03b3b' }}>
-                {Math.abs(latest.wow_delta).toFixed(2)} vs last week
+                {Math.abs(deltaPts).toFixed(1)} pts vs last week
               </Typography>
             </Stack>
           )}
         </Stack>
         <Typography variant="caption" color="text.secondary">
           {latest ? `平均 Level L${latest.avg_maturity_level.toFixed(1)} / L${maxLevel} · ${latest.subject_count} data subjects` : ''}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3 }}>
+          計算方式:平均 Maturity Level ÷ L{maxLevel} × 100
         </Typography>
         <Box sx={{ height: 48, mt: 1 }}>
           <ReactECharts option={sparklineOption} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} />
