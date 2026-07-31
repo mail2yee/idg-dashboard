@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter
 
@@ -44,7 +44,8 @@ async def governance_risk_priority(limit: int = 15):
     levels = await _latest_levels()
     top_level = max_level()
 
-    usage_docs = await db.usage_stats.find({}).to_list(length=None)
+    window_start = datetime.now(timezone.utc) - timedelta(days=USAGE_HISTORY_FULL_DAYS)
+    usage_docs = await db.usage_stats.find({"date": {"$gte": window_start}}).to_list(length=None)
     usage_by_subject: dict = {}
     days_by_subject: dict = {}
     for u in usage_docs:
