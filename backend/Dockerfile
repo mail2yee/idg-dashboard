@@ -9,7 +9,8 @@ COPY . .
 
 EXPOSE 8000
 
-# Re-seeds fake data on every start — this is a demo dataset with no real
-# user-generated writes, so a fresh consistent dataset on each deploy is the
-# desired behavior, not a bug.
-CMD ["sh", "-c", "python seed.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+# No auto-seed here anymore -- current-state metadata comes from a real
+# DataHub instance via refresh.py (run on the host, see deploy.sh), which
+# populates this same Mongo before/independently of the backend container
+# starting. The container just serves whatever's already there.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

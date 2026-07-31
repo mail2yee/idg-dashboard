@@ -138,12 +138,17 @@ export interface RiskPriorityRow {
   domain: string
   maturity_level: number
   gap: number
-  usage_30d: number
-  risk_score: number
+  usage_30d: number | null
+  usage_days_accumulated: number
+  usage_sufficient: boolean
+  risk_score: number | null
 }
 export interface RiskPriorityResponse {
   max_level: number
+  usage_history_min_days: number
+  usage_history_full_days: number
   scatter: RiskPriorityRow[]
+  accumulating: RiskPriorityRow[]
   top_risk: RiskPriorityRow[]
   zombies: RiskPriorityRow[]
 }

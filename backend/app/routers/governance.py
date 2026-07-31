@@ -20,28 +20,45 @@ async def _latest_levels() -> dict:
     return {d["subject_id"]: d["maturity_level"] for d in docs}
 
 
+USAGE_HISTORY_MIN_DAYS = 7
+USAGE_HISTORY_FULL_DAYS = 30
+
+
 @router.get("/governance/risk-priority")
 async def governance_risk_priority(limit: int = 15):
-    """Risk = 30-day usage x how far the subject is from L{max}. High-traffic,
-    low-maturity subjects surface first (highest blast radius if something
-    goes wrong); "zombie" subjects (well-governed but essentially unused) are
-    called out separately as deprecation/consolidation candidates instead of
-    being ranked on the same axis."""
+    """Risk = accumulated usage x how far the subject is from L{max}.
+    High-traffic, low-maturity subjects surface first (highest blast radius
+    if something goes wrong); "zombie" subjects (well-governed but
+    essentially unused) are called out separately as deprecation/
+    consolidation candidates instead of being ranked on the same axis.
+
+    usage_stats only ever has "today"'s point coming out of DataHub itself
+    (no timeseries retention in the real target environment) -- refresh.py
+    accumulates one day at a time into our own DB, so a subject synced for
+    the first time this week has only a few days of usage on record, not a
+    real 30-day total. Ranking that against subjects with a full accumulated
+    month would understate its risk, so anything under USAGE_HISTORY_MIN_DAYS
+    is marked insufficient and left out of the ranked list rather than shown
+    with a misleadingly-low score."""
     subjects = await db.data_subjects.find({}).to_list(length=None)
     levels = await _latest_levels()
     top_level = max_level()
 
     usage_docs = await db.usage_stats.find({}).to_list(length=None)
     usage_by_subject: dict = {}
+    days_by_subject: dict = {}
     for u in usage_docs:
         usage_by_subject[u["subject_id"]] = usage_by_subject.get(u["subject_id"], 0) + u["query_count"]
+        days_by_subject[u["subject_id"]] = days_by_subject.get(u["subject_id"], 0) + 1
 
     rows = []
     for s in subjects:
         level = levels.get(s["_id"])
         if level is None:
             continue
-        usage_30d = usage_by_subject.get(s["_id"], 0)
+        usage_days = days_by_subject.get(s["_id"], 0)
+        usage_sufficient = usage_days >= USAGE_HISTORY_MIN_DAYS
+        usage_30d = usage_by_subject.get(s["_id"], 0) if usage_sufficient else None
         gap = top_level - level
         rows.append({
             "id": str(s["_id"]),
@@ -50,19 +67,26 @@ async def governance_risk_priority(limit: int = 15):
             "maturity_level": level,
             "gap": gap,
             "usage_30d": usage_30d,
-            "risk_score": usage_30d * gap,
+            "usage_days_accumulated": usage_days,
+            "usage_sufficient": usage_sufficient,
+            "risk_score": (usage_30d * gap) if usage_sufficient else None,
         })
 
+    ranked = [r for r in rows if r["usage_sufficient"]]
+    accumulating = [r for r in rows if not r["usage_sufficient"]]
     zombies = sorted(
-        (r for r in rows if r["gap"] <= 1 and r["usage_30d"] < 10),
+        (r for r in ranked if r["gap"] <= 1 and r["usage_30d"] < 10),
         key=lambda r: -r["maturity_level"],
     )
-    rows.sort(key=lambda r: -r["risk_score"])
+    ranked.sort(key=lambda r: -r["risk_score"])
 
     return {
         "max_level": top_level,
-        "scatter": rows,
-        "top_risk": rows[:limit],
+        "usage_history_min_days": USAGE_HISTORY_MIN_DAYS,
+        "usage_history_full_days": USAGE_HISTORY_FULL_DAYS,
+        "scatter": ranked,
+        "accumulating": accumulating,
+        "top_risk": ranked[:limit],
         "zombies": zombies[:limit],
     }
 

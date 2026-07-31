@@ -18,7 +18,10 @@ export default function RiskPriorityChart() {
 
   const c = chrome[mode]
 
-  const maxRisk = useMemo(() => Math.max(1, ...(data?.scatter.map((r) => r.risk_score) ?? [1])), [data])
+  const maxRisk = useMemo(
+    () => Math.max(1, ...(data?.scatter.map((r) => r.risk_score ?? 0) ?? [1])),
+    [data],
+  )
 
   const option = useMemo(() => {
     const rows = data?.scatter ?? []
@@ -29,9 +32,9 @@ export default function RiskPriorityChart() {
       data: rows
         .filter((r) => r.domain === domain)
         .map((r) => ({
-          value: [r.usage_30d, r.maturity_level],
+          value: [r.usage_30d ?? 0, r.maturity_level],
           name: r.name,
-          risk_score: r.risk_score,
+          risk_score: r.risk_score ?? 0,
         })),
       symbolSize: (_val: number[], params: { data: { risk_score: number } }) =>
         8 + (params.data.risk_score / maxRisk) * 26,
@@ -52,11 +55,11 @@ export default function RiskPriorityChart() {
         trigger: 'item',
         ...tooltipStyle(mode),
         formatter: (p: { seriesName: string; data: { name: string; value: number[]; risk_score: number } }) =>
-          `${p.data.name}(${p.seriesName})<br/>Level L${p.data.value[1]} · 近30天查詢 ${p.data.value[0]}<br/>風險分數 ${p.data.risk_score}`,
+          `${p.data.name}(${p.seriesName})<br/>Level L${p.data.value[1]} · 累積查詢 ${p.data.value[0]}<br/>風險分數 ${p.data.risk_score}`,
       },
       xAxis: {
         type: 'value',
-        name: '近 30 天查詢次數(usage)',
+        name: '累積查詢次數(usage,最多近 30 天)',
         nameLocation: 'middle',
         nameGap: 32,
         ...baseAxis(mode),
@@ -100,12 +103,12 @@ export default function RiskPriorityChart() {
       },
       {
         field: 'usage_30d',
-        headerName: '近30天查詢',
+        headerName: '累積查詢量',
         flex: 0.9,
         type: 'number',
         renderCell: (params) => (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-            <Typography variant="body2">{(params.value as number).toLocaleString()}</Typography>
+            <Typography variant="body2">{((params.value as number) ?? 0).toLocaleString()}</Typography>
           </Box>
         ),
       },
@@ -117,7 +120,7 @@ export default function RiskPriorityChart() {
         renderCell: (params) => (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {(params.value as number).toLocaleString()}
+              {((params.value as number) ?? 0).toLocaleString()}
             </Typography>
           </Box>
         ),
@@ -133,7 +136,8 @@ export default function RiskPriorityChart() {
           風險優先排序:誰該先救?
         </Typography>
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-          風險分數 = 近 30 天使用量 × 距離 L5 的差距。使用量高但 Level 低的資料集(圖上偏右下、泡泡越大)代表一旦出問題影響範圍最廣,應該優先處理;而不是單純看誰的 Level 最低。
+          風險分數 = 累積使用量 × 距離 L5 的差距。使用量高但 Level 低的資料集(圖上偏右下、泡泡越大)代表一旦出問題影響範圍最廣,應該優先處理;而不是單純看誰的 Level 最低。
+          使用量是每天從 DataHub 同步一筆、自己累積起來的,不是一次拿到 30 天——新收錄的資料集要等累積滿 {data?.usage_history_min_days ?? 7} 天才會出現在排名裡。
         </Typography>
         <Box sx={{ height: 320 }}>
           <ReactECharts option={option} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} />
@@ -160,8 +164,27 @@ export default function RiskPriorityChart() {
                 <Chip
                   key={z.id}
                   size="small"
-                  label={`${z.name} · L${z.maturity_level} · ${z.usage_30d} 次/30天`}
+                  label={`${z.name} · L${z.maturity_level} · ${z.usage_30d} 次`}
                   onClick={() => setSelectedSubjectId(z.id)}
+                  sx={{ cursor: 'pointer' }}
+                />
+              ))}
+            </Stack>
+          </Box>
+        )}
+        {data && data.accumulating.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+              資料累積中(使用量歷史還不足 {data.usage_history_min_days} 天,尚未列入排序)
+            </Typography>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+              {data.accumulating.map((r) => (
+                <Chip
+                  key={r.id}
+                  size="small"
+                  variant="outlined"
+                  label={`${r.name} · ${r.usage_days_accumulated}/${data.usage_history_min_days} 天`}
+                  onClick={() => setSelectedSubjectId(r.id)}
                   sx={{ cursor: 'pointer' }}
                 />
               ))}

@@ -1,0 +1,13 @@
+# Deps for the offline DataHub tooling (datahub_ingest.py / datahub_sync.py /
+# refresh.py) -- NOT part of the running app's image (backend/requirements.txt).
+# acryl-datahub is a heavy ingestion-framework dependency with a lot of
+# transitive packages; keeping it out of the FastAPI app's own image avoids
+# bloating/destabilizing the thing that actually serves traffic.
+#
+# Install into a dedicated venv, not backend/.venv:
+#   python3 -m venv backend/.venv-datahub
+#   backend/.venv-datahub/bin/pip install -r backend/requirements-datahub.txt
+acryl-datahub==1.6.0.16
+pymongo==4.17.0
+Faker==33.1.0
+requests==2.34.2
