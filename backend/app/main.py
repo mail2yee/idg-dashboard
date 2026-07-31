@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import agent, config, domains, maturity, subjects, teams
+from app.routers import agent, config, domains, governance, maturity, subjects, teams
 
 app = FastAPI(title="IDG Dashboard API")
 
@@ -19,6 +19,7 @@ app.include_router(domains.router, prefix="/api")
 app.include_router(agent.router, prefix="/api")
 app.include_router(config.router, prefix="/api")
 app.include_router(teams.router, prefix="/api")
+app.include_router(governance.router, prefix="/api")
 
 
 @app.get("/api/health")

@@ -132,6 +132,68 @@ export interface AgentResponse {
   data: unknown
 }
 
+export interface RiskPriorityRow {
+  id: string
+  name: string
+  domain: string
+  maturity_level: number
+  gap: number
+  usage_30d: number
+  risk_score: number
+}
+export interface RiskPriorityResponse {
+  max_level: number
+  scatter: RiskPriorityRow[]
+  top_risk: RiskPriorityRow[]
+  zombies: RiskPriorityRow[]
+}
+
+export interface OwnershipGapEntry {
+  id: string
+  name: string
+  domain: string
+}
+export interface OwnershipCoverageResponse {
+  total_subjects: number
+  fully_covered: number
+  coverage_pct: number
+  role_coverage: Record<string, { missing_count: number; covered_pct: number }>
+  gaps: Record<string, OwnershipGapEntry[]>
+  by_domain: { domain: string; total: number; fully_covered: number; coverage_pct: number }[]
+}
+
+export interface StewardshipTeamRow {
+  team: string
+  open_count: number
+  overdue_count: number
+  resolved_7d_count: number
+  avg_resolution_hours: number | null
+}
+export interface StewardshipResponse {
+  teams: StewardshipTeamRow[]
+  most_responsive_team: string | null
+}
+
+export interface LineageIsland {
+  id: string
+  name: string
+  domain: string
+}
+export interface LineageRiskHub {
+  id: string
+  name: string
+  domain: string
+  fan_out: number
+  maturity_level: number
+}
+export interface LineageCoverageResponse {
+  total_subjects: number
+  covered: number
+  coverage_pct: number
+  islands: LineageIsland[]
+  risk_hubs: LineageRiskHub[]
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`/api${path}`)
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
@@ -194,6 +256,10 @@ export const api = {
   subjectTrend: (id: string, period: Period = 'week') =>
     get<{ trend: MaturitySnapshot[] }>(`/subjects/${id}/trend?period=${period}`),
   agentQuery: (question: string) => post<AgentResponse>('/agent/query', { question }),
+  governanceRiskPriority: (limit = 15) => get<RiskPriorityResponse>(`/governance/risk-priority?limit=${limit}`),
+  governanceOwnershipCoverage: () => get<OwnershipCoverageResponse>('/governance/ownership-coverage'),
+  governanceStewardship: () => get<StewardshipResponse>('/governance/stewardship'),
+  governanceLineageCoverage: () => get<LineageCoverageResponse>('/governance/lineage-coverage'),
 }
 
 export interface AgentChatCallbacks {
