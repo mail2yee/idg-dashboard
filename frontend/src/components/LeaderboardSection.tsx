@@ -10,6 +10,7 @@ import { api, type DomainTrendSummary, type SubjectTrendSummary, type OwnerTeamT
 import { useStore } from '../state/store'
 import { domainColor, DOMAIN_ORDER, categorical, status } from '../theme/palette'
 import { getLevelColor } from '../theme/badges'
+import InfoTooltip from './InfoTooltip'
 
 function DomainBadgeCard({
   d,
@@ -323,6 +324,7 @@ export default function LeaderboardSection() {
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
           <EmojiEventsIcon sx={{ fontSize: 20 }} />
           <Typography variant="subtitle1">Leaderboard</Typography>
+          <InfoTooltip text="冠軍卡跟 Spotlight 只顯示「進步」,不會顯示退步排名,故意設計成只鼓勵、不點名——公開榜是依 Owner Team 彙總,個人名字只會出現在該資料集自己的詳情頁裡。" />
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           目標是每個 Domain 跟 data subject 都逐步邁向 L{maxLevel},徽章代表目前的等級,不代表名次高低。

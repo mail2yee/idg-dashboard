@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { api, type OrgSnapshot } from '../api/client'
 import { useStore } from '../state/store'
 import { chrome, categorical } from '../theme/palette'
+import InfoTooltip from './InfoTooltip'
 
 export default function HeadlineIndexCard() {
   const mode = useStore((s) => s.mode)
@@ -58,9 +59,12 @@ export default function HeadlineIndexCard() {
   return (
     <Card>
       <CardContent>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
-          Data Quality Index
-        </Typography>
+        <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 0 }}>
+            Data Quality Index
+          </Typography>
+          <InfoTooltip text="全公司資料治理成熟度的單一總分,方便對外(例如管理層)一眼看懂現況,不用先解釋 L1-L5 的階梯規則。內部盤點細節請看下方各 Domain 的 Maturity Level。" />
+        </Stack>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'baseline' }}>
           <Typography sx={{ fontSize: 48, fontWeight: 600, lineHeight: 1 }}>
             {latest ? `${latest.data_quality_index.toFixed(1)}%` : '—'}

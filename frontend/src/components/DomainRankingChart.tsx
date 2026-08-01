@@ -1,10 +1,11 @@
-import { Card, CardContent, Typography, Box } from '@mui/material'
+import { Card, CardContent, Typography, Box, Stack } from '@mui/material'
 import ReactECharts from 'echarts-for-react'
 import { useEffect, useState } from 'react'
 import { api, type OrgSnapshot } from '../api/client'
 import { useStore } from '../state/store'
 import { chrome, domainColor } from '../theme/palette'
 import { baseAxis, tooltipStyle, FONT_FAMILY } from '../theme/echartsTheme'
+import InfoTooltip from './InfoTooltip'
 
 export default function DomainRankingChart() {
   const mode = useStore((s) => s.mode)
@@ -74,9 +75,12 @@ export default function DomainRankingChart() {
   return (
     <Card>
       <CardContent>
-        <Typography variant="subtitle2" gutterBottom>
-          Domain Maturity 排名
-        </Typography>
+        <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
+          <Typography variant="subtitle2" gutterBottom sx={{ mb: 0 }}>
+            Domain Maturity 排名
+          </Typography>
+          <InfoTooltip text="每個 Domain 底下所有 data subject 的 Maturity Level 平均值,由高到低排序。點一個 Domain 可以篩選下面的清單只看那個 Domain。" />
+        </Stack>
         <Box sx={{ height: 260 }}>
           <ReactECharts
             option={option}

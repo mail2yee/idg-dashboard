@@ -6,6 +6,7 @@ import { api, type RiskPriorityResponse, type RiskPriorityRow } from '../../api/
 import { useStore } from '../../state/store'
 import { chrome, domainColor, DOMAIN_ORDER } from '../../theme/palette'
 import { baseAxis, tooltipStyle, FONT_FAMILY } from '../../theme/echartsTheme'
+import InfoTooltip from '../InfoTooltip'
 
 export default function RiskPriorityChart() {
   const mode = useStore((s) => s.mode)
@@ -73,6 +74,28 @@ export default function RiskPriorityChart() {
         ...baseAxis(mode),
       },
       series,
+      // Quadrant hint directly on the chart -- usage high (right) x level
+      // low (bottom) is the priority zone; a label right where the eye
+      // already is teaches this faster than caption text ever could.
+      graphic: rows.length
+        ? [
+            {
+              type: 'text',
+              right: 28,
+              bottom: 64,
+              style: {
+                text: '⚠ 高使用量 × 低 Level\n優先處理區',
+                fill: c.textMuted,
+                fontSize: 11,
+                fontFamily: FONT_FAMILY,
+                textAlign: 'right',
+                lineHeight: 15,
+              },
+              silent: true,
+              z: 1,
+            },
+          ]
+        : [],
     }
   }, [data, mode, c, maxRisk])
 
@@ -132,12 +155,18 @@ export default function RiskPriorityChart() {
   return (
     <Card>
       <CardContent>
-        <Typography variant="subtitle1" gutterBottom>
-          風險優先排序:誰該先救?
-        </Typography>
+        <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ mb: 0 }}>
+            風險優先排序:誰該先救?
+          </Typography>
+          <InfoTooltip
+            text={`使用量高但 Level 低的資料集(圖上偏右下、泡泡越大)代表一旦出問題影響範圍最廣,應該優先處理,而不是單純看誰的 Level 最低。
+
+使用量是每天從 DataHub 同步一筆、自己累積起來的,不是一次拿到 30 天——新收錄的資料集要等累積滿 ${data?.usage_history_min_days ?? 7} 天才會出現在排名裡。`}
+          />
+        </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-          風險分數 = 累積使用量 × 距離 L5 的差距。使用量高但 Level 低的資料集(圖上偏右下、泡泡越大)代表一旦出問題影響範圍最廣,應該優先處理;而不是單純看誰的 Level 最低。
-          使用量是每天從 DataHub 同步一筆、自己累積起來的,不是一次拿到 30 天——新收錄的資料集要等累積滿 {data?.usage_history_min_days ?? 7} 天才會出現在排名裡。
+          風險分數 = 累積使用量 × 距離 L5 的差距
         </Typography>
         <Box sx={{ height: 320 }}>
           <ReactECharts option={option} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} />

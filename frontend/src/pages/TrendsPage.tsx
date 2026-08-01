@@ -25,6 +25,7 @@ import { domainColor, DOMAIN_ORDER, categorical, chrome } from '../theme/palette
 import { getLevelColor } from '../theme/badges'
 import { tooltipStyle, FONT_FAMILY, formatWeekLabel } from '../theme/echartsTheme'
 import DeltaBadge from '../components/DeltaBadge'
+import InfoTooltip from '../components/InfoTooltip'
 
 type Scope = 'domain' | 'subject'
 
@@ -323,9 +324,14 @@ export default function TrendsPage() {
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Stack direction="row" sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }}>
-            <Typography variant="subtitle1">
-              {focused ? focused.label : scope === 'domain' ? `全部 Domain 的 Level 分佈` : `全部 Data Subject 的 Level 分佈`}
-            </Typography>
+            <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
+              <Typography variant="subtitle1">
+                {focused ? focused.label : scope === 'domain' ? `全部 Domain 的 Level 分佈` : `全部 Data Subject 的 Level 分佈`}
+              </Typography>
+              {!focused && (
+                <InfoTooltip text="堆疊長條本身因為底線一直在跳動,不容易單獨看中間某個顏色的漲跌,所以每個 Level 又疊了一條粗線,單獨畫出「這個 Level 的數量」自己隨週次的走勢,方便追蹤單一 Level 是變多還是變少。" />
+              )}
+            </Stack>
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <Autocomplete
                 size="small"
@@ -348,7 +354,7 @@ export default function TrendsPage() {
           <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
             {focused
               ? `過去 ${focused.dates.length} 週${period !== 'week' ? `(約${PERIOD_LABELS[period]}對比)` : ''}的 Maturity Level 趨勢`
-              : `淺色堆疊長條 = 這週${scope === 'domain' ? 'Domain' : 'data subject'}總數在 5 個 Level 間的組成比例;疊在上面的粗線 = 「這個 Level 的數量」自己隨週次的走勢,方便單獨追蹤某個 Level 是變多還變少(堆疊長條本身因為底線一直在跳動,不容易單獨看中間某個顏色的漲跌,所以才疊線)。`}
+              : `淺色堆疊長條 = 這週${scope === 'domain' ? 'Domain' : 'data subject'}總數在 5 個 Level 間的組成比例;粗線 = 各 Level 數量隨週次的走勢`}
           </Typography>
           <Box sx={{ height: 380 }}>
             {focused && focusedOption && (

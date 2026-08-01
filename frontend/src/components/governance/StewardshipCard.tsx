@@ -6,6 +6,7 @@ import { api, type StewardshipResponse } from '../../api/client'
 import { useStore } from '../../state/store'
 import { chrome, status } from '../../theme/palette'
 import { baseAxis, tooltipStyle, FONT_FAMILY } from '../../theme/echartsTheme'
+import InfoTooltip from '../InfoTooltip'
 
 export default function StewardshipCard() {
   const mode = useStore((s) => s.mode)
@@ -64,11 +65,14 @@ export default function StewardshipCard() {
   return (
     <Card>
       <CardContent>
-        <Typography variant="subtitle1" gutterBottom>
-          Stewardship 回應力:出問題之後有沒有人管?
-        </Typography>
+        <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ mb: 0 }}>
+            Stewardship 回應力:出問題之後有沒有人管?
+          </Typography>
+          <InfoTooltip text="Maturity Level 的 L4 只看「有沒有裝品質檢查」,這裡看「檢查出問題之後,多久有人處理」——兩者互補,不是重複。" />
+        </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-          Maturity Level 的 L4 只看「有沒有裝品質檢查」,這裡看「檢查出問題之後,多久有人處理」。逾期 = incident 開啟超過 7 天還沒解決。
+          逾期 = incident 開啟超過 7 天還沒解決
         </Typography>
 
         {data?.most_responsive_team && (

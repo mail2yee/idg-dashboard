@@ -3,6 +3,7 @@ import { Card, CardContent, Typography, Box, Stack, Chip } from '@mui/material'
 import { api, type LineageCoverageResponse } from '../../api/client'
 import { useStore } from '../../state/store'
 import { domainColor } from '../../theme/palette'
+import InfoTooltip from '../InfoTooltip'
 
 export default function LineageCoverageCard() {
   const mode = useStore((s) => s.mode)
@@ -16,11 +17,14 @@ export default function LineageCoverageCard() {
   return (
     <Card>
       <CardContent>
-        <Typography variant="subtitle1" gutterBottom>
-          Lineage 覆蓋率:出事時看不看得到影響範圍?
-        </Typography>
+        <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ mb: 0 }}>
+            Lineage 覆蓋率:出事時看不看得到影響範圍?
+          </Typography>
+          <InfoTooltip text="完全沒有 lineage 的資料集是「盲點」——壞掉的時候沒人知道會影響誰。下游依賴多但 Level 又低的資料集,一旦出問題影響會擴散最廣,應該優先補強。" />
+        </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-          完全沒有 lineage 的資料集是「盲點」——壞掉的時候沒人知道會影響誰。下游依賴多但 Level 又低的資料集,一旦出問題影響會擴散最廣,應該優先補強。
+          有 lineage 記錄的資料集佔比
         </Typography>
 
         <Box sx={{ mb: 2 }}>

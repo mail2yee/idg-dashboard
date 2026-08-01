@@ -18,6 +18,7 @@ import { useStore } from '../state/store'
 import { chrome, categorical, status, domainColor } from '../theme/palette'
 import { getLevelColor } from '../theme/badges'
 import { baseAxis, tooltipStyle, formatWeekLabel } from '../theme/echartsTheme'
+import InfoTooltip from './InfoTooltip'
 
 const ROLE_LABELS: Record<string, string> = {
   DATA_OWNER: 'Data Owner',
@@ -112,9 +113,12 @@ export default function SubjectDetailDrawer() {
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography variant="subtitle2" gutterBottom>
-              KPI 拆解(構成 Maturity Level 的底層指標)
-            </Typography>
+            <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
+              <Typography variant="subtitle2" gutterBottom sx={{ mb: 0 }}>
+                KPI 拆解(構成 Maturity Level 的底層指標)
+              </Typography>
+              <InfoTooltip text="這裡是連續分數(0-1),跟上面的 Maturity Level 階梯是互補視角——Level 卡在某一級時,這裡可以看出是哪個面向拖累的。" />
+            </Stack>
             <Stack spacing={1.2}>
               {detail.snapshot &&
                 Object.entries(detail.snapshot.sub_scores).map(([key, value]) => (

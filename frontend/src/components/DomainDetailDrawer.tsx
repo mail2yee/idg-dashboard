@@ -7,6 +7,7 @@ import { useStore } from '../state/store'
 import { chrome, categorical, domainColor } from '../theme/palette'
 import { baseAxis, tooltipStyle, formatWeekLabel } from '../theme/echartsTheme'
 import DeltaBadge from './DeltaBadge'
+import InfoTooltip from './InfoTooltip'
 
 export default function DomainDetailDrawer() {
   const mode = useStore((s) => s.mode)
@@ -96,9 +97,12 @@ export default function DomainDetailDrawer() {
 
             <Divider sx={{ my: 2 }} />
 
-            <Typography variant="subtitle2" gutterBottom>
-              Domain 平均 KPI 拆解(構成 Maturity Level 的底層指標)
-            </Typography>
+            <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
+              <Typography variant="subtitle2" gutterBottom sx={{ mb: 0 }}>
+                Domain 平均 KPI 拆解(構成 Maturity Level 的底層指標)
+              </Typography>
+              <InfoTooltip text="這裡是連續分數(0-1),跟上面的 Maturity Level 階梯是互補視角——Level 卡在某一級時,這裡可以看出是哪個面向拖累的。" />
+            </Stack>
             <Stack spacing={1.2}>
               {Object.entries(detail.avg_sub_scores).map(([key, value]) => (
                 <Box key={key}>

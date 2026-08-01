@@ -5,6 +5,7 @@ import { api, type OwnershipCoverageResponse } from '../../api/client'
 import { useStore } from '../../state/store'
 import { chrome, domainColor } from '../../theme/palette'
 import { baseAxis, tooltipStyle, FONT_FAMILY } from '../../theme/echartsTheme'
+import InfoTooltip from '../InfoTooltip'
 
 const ROLE_LABELS: Record<string, string> = {
   DATA_OWNER: 'Data Owner',
@@ -88,11 +89,14 @@ export default function OwnershipCoverageCard() {
   return (
     <Card>
       <CardContent>
-        <Typography variant="subtitle1" gutterBottom>
-          Ownership 覆蓋率:誰在管這份資料?
-        </Typography>
+        <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ mb: 0 }}>
+            Ownership 覆蓋率:誰在管這份資料?
+          </Typography>
+          <InfoTooltip text="這是最根本的治理缺口——沒有指派 Owner 的資料集等於沒人負責推動品質,補指派永遠是最快能做的 action。" />
+        </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-          沒有指派 Owner/Steward/IT Owner 的資料集等於沒人負責推動品質——這是最根本的治理缺口,補指派永遠是最快能做的 action。
+          缺 Owner/Steward/IT Owner 任一角色 = 沒人負責
         </Typography>
 
         <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
