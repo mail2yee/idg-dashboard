@@ -41,7 +41,15 @@ async def stream_chat_completion(messages: List[Dict]) -> AsyncIterator[str]:
     headers = {"Content-Type": "application/json"}
     if LLM_API_KEY:
         headers["Authorization"] = f"Bearer {LLM_API_KEY}"
-    payload = {"model": LLM_MODEL, "messages": messages, "stream": True}
+    # temperature 0 -- this call phrases a reply that's supposed to state
+    # only facts already present in the grounding data (see
+    # intents._build_reply_prompt); unlike ollama_client.classify_intent's
+    # temperature 0 (a different, native /api/chat call, hence "options":
+    # {"temperature": 0} there vs. the top-level field here -- this client
+    # speaks the OpenAI-compatible shape per this file's docstring), this
+    # is the one place in the agent that generates free text shown to the
+    # user, so it's exactly where creative deviation is least wanted.
+    payload = {"model": LLM_MODEL, "messages": messages, "stream": True, "temperature": 0}
 
     async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
         async with client.stream("POST", url, json=payload, headers=headers) as resp:

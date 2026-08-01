@@ -26,6 +26,13 @@ from typing import AsyncIterator, Optional
 from app.agent.llm_client import stream_chat_completion
 from app.agent.ollama_client import classify_intent
 from app.db import db
+from app.routers.governance import (
+    governance_lineage_coverage,
+    governance_ownership_coverage,
+    governance_risk_priority,
+    governance_stewardship,
+    governance_subject_growth,
+)
 from app.util import compute_deltas, period_delta, serialize
 
 DOMAIN_KEYWORDS = {
@@ -37,7 +44,10 @@ DOMAIN_KEYWORDS = {
     "platform": "Platform", "平台": "Platform",
 }
 
-CN_NUMBERS = {"一": 1, "二": 2, "兩": 2, "三": 3, "四": 4, "五": 5, "十": 10}
+CN_NUMBERS = {
+    "一": 1, "二": 2, "兩": 2, "三": 3, "四": 4, "五": 5,
+    "六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+}
 
 
 def _extract_n(question: str, default: int = 3) -> int:
@@ -208,13 +218,27 @@ async def run_domain_ranking():
 
 
 async def run_subject_detail(name_hint: str):
-    subject = await db.data_subjects.find_one({"name": {"$regex": re.escape(name_hint), "$options": "i"}})
-    if not subject:
+    matches = await db.data_subjects.find(
+        {"name": {"$regex": re.escape(name_hint), "$options": "i"}}
+    ).to_list(length=None)
+    if not matches:
         return {
             "answer_text": f"找不到名稱包含「{name_hint}」的 data subject。",
             "chart_directive": None,
             "data": None,
         }
+    if len(matches) > 1:
+        # Silently picking the first match would mean confidently
+        # describing the wrong data subject whenever the hint is generic
+        # (e.g. a table-name prefix several subjects share) -- surfacing
+        # the ambiguity instead of guessing is the whole point of this
+        # disambiguation path.
+        names = "、".join(m["name"] for m in matches[:8])
+        more = f"等 {len(matches)} 個" if len(matches) > 8 else ""
+        answer = f"找到 {len(matches)} 個名稱包含「{name_hint}」的 data subject,不確定您指的是哪一個:{names}{more}。可以提供更完整的名稱嗎?"
+        return {"answer_text": answer, "chart_directive": None, "data": None}
+
+    subject = matches[0]
     latest_date_doc = await db.maturity_snapshots.find_one(sort=[("snapshot_date", -1)])
     latest_date = latest_date_doc["snapshot_date"] if latest_date_doc else None
     snapshot = await db.maturity_snapshots.find_one({"subject_id": subject["_id"], "snapshot_date": latest_date})
@@ -238,6 +262,94 @@ async def run_trend_over_time(domain: Optional[str] = None):
         "answer_text": answer,
         "chart_directive": {"type": "show_trend", "domain": domain},
         "data": serialize(docs),
+    }
+
+
+# The five functions below call governance.py's route handlers directly
+# (they're plain async functions with no FastAPI-injected state beyond
+# typed params with defaults, so this is exactly equivalent to how FastAPI
+# itself would invoke them) rather than re-deriving the same Mongo queries
+# a second time here. Those endpoints' logic (risk scoring, coverage-gap
+# tracking, growth flagging) is materially more involved than the simpler
+# queries the other intents above run inline, so duplicating it would risk
+# the two copies silently drifting apart -- calling the already
+# pytest-covered (tests/test_governance.py) functions means these intents
+# inherit that correctness for free.
+
+
+async def run_risk_priority(limit: int = 5):
+    result = await governance_risk_priority(limit=limit)
+    top = result["top_risk"][:limit]
+    if not top:
+        return {
+            "answer_text": "目前使用量資料還在累積中,還不足以計算風險優先排序。",
+            "chart_directive": None,
+            "data": result,
+        }
+    answer = f"風險優先排序前 {len(top)} 個資料集是:" + "、".join(
+        f"{r['name']}({r['domain']}, 風險分數 {r['risk_score']})" for r in top
+    )
+    return {
+        "answer_text": answer,
+        "chart_directive": {"type": "highlight_subjects", "subject_ids": [r["id"] for r in top]},
+        "data": top,
+    }
+
+
+async def run_ownership_coverage():
+    result = await governance_ownership_coverage()
+    answer = (
+        f"全公司 Ownership 覆蓋率為 {result['coverage_pct']}%"
+        f"({result['fully_covered']}/{result['total_subjects']} 個 data subject 三個角色都已指派)。"
+    )
+    worst = min(result["by_domain"], key=lambda d: d["coverage_pct"]) if result["by_domain"] else None
+    if worst:
+        answer += f" 覆蓋率最低的是 {worst['domain']}({worst['coverage_pct']}%)。"
+    return {
+        "answer_text": answer,
+        "chart_directive": {"type": "highlight_domains", "domains": [worst["domain"]]} if worst else None,
+        "data": result,
+    }
+
+
+async def run_stewardship():
+    result = await governance_stewardship()
+    teams = result["teams"]
+    if not teams:
+        return {"answer_text": "目前沒有 incident 資料可供分析。", "chart_directive": None, "data": result}
+    worst = max(teams, key=lambda t: t["overdue_count"])
+    answer = f"目前逾期 incident 最多的是 {worst['team']}(逾期 {worst['overdue_count']} 件)。"
+    if result["most_responsive_team"]:
+        answer += f" 回應最快的是 {result['most_responsive_team']}。"
+    return {"answer_text": answer, "chart_directive": None, "data": result}
+
+
+async def run_lineage_coverage():
+    result = await governance_lineage_coverage()
+    answer = f"目前 Lineage 覆蓋率為 {result['coverage_pct']}%({result['covered']}/{result['total_subjects']})。"
+    islands = result["islands"]
+    if islands:
+        names = "、".join(i["name"] for i in islands[:5])
+        answer += f" 完全沒有 lineage 記錄的孤島有:{names}。"
+    return {
+        "answer_text": answer,
+        "chart_directive": {"type": "highlight_subjects", "subject_ids": [i["id"] for i in islands]} if islands else None,
+        "data": result,
+    }
+
+
+async def run_subject_growth():
+    result = await governance_subject_growth()
+    flagged = result["flagged_domains"]
+    if not flagged:
+        answer = f"近 {result['window_days']} 天全公司新增了 {result['new_subjects_total']} 個 data subject,沒有 Domain 出現異常暴增。"
+        return {"answer_text": answer, "chart_directive": None, "data": result}
+    names = "、".join(f"{d['domain']}(+{d['new_count']})" for d in flagged)
+    answer = f"近 {result['window_days']} 天有異常成長的 Domain:{names}——建議確認是否為分類問題。"
+    return {
+        "answer_text": answer,
+        "chart_directive": {"type": "highlight_domains", "domains": [d["domain"] for d in flagged]},
+        "data": result,
     }
 
 
@@ -268,6 +380,16 @@ async def _dispatch_llm_intent(intent: str, params: dict):
         return await run_subject_detail(params["name_hint"])
     if intent == "trend_over_time":
         return await run_trend_over_time(domain=params.get("domain"))
+    if intent == "risk_priority":
+        return await run_risk_priority(limit=params.get("n") or 5)
+    if intent == "ownership_coverage":
+        return await run_ownership_coverage()
+    if intent == "stewardship":
+        return await run_stewardship()
+    if intent == "lineage_coverage":
+        return await run_lineage_coverage()
+    if intent == "subject_growth":
+        return await run_subject_growth()
     return None
 
 
@@ -285,10 +407,15 @@ async def classify_and_run(question: str):
 
 async def _classify_and_run_keywords(q: str):
     """Keyword-rule fallback, used when Ollama is unreachable or returns
-    "unknown". Only covers the original four intents -- top_n_by_delta and
-    stagnant_domains need real language understanding (distinguishing
-    "highest" from "improved the most") that keyword matching can't do
-    reliably, so those are LLM-only."""
+    "unknown". Only covers the original four intents (top_n_by_maturity,
+    domain_ranking, subject_detail, trend_over_time) -- everything added
+    since (top_n_by_delta, stagnant_domains, and the five governance
+    intents: risk_priority, ownership_coverage, stewardship,
+    lineage_coverage, subject_growth) needs real language understanding
+    that keyword matching can't do reliably, so those are LLM-only. When
+    Ollama is unreachable, a question that would have hit one of those
+    just falls through to the generic "here's what I can answer" reply
+    below instead."""
     domain = _extract_domain(q)
 
     is_worst = any(k in q for k in ["最差", "最低", "worst", "bottom", "最少"])
@@ -357,8 +484,66 @@ def _build_fallback_prompt(question: str) -> str:
 
 使用者問了:「{question}」
 
-系統判斷這個問題目前不屬於任何已支援的查詢類型(不是查排名、進步幅度、停滯偵測、特定 data subject 或歷史趨勢)。請用自然、友善的繁體中文簡短回覆,說明你能協助的範圍,並舉 1-2 個範例問題(例如「maturity 最高的三個 Domain?」、「本週進步最多的 Domain?」、「連續兩個月沒有進步的 Domain?」)。一兩句話就好,不要用 Markdown 或項目符號;如果使用者的問題是打招呼,就自然回應打招呼再帶出範例。
+系統判斷這個問題目前不屬於任何已支援的查詢類型(不是查排名、進步幅度、停滯偵測、特定 data subject、歷史趨勢,也不是查風險優先排序、ownership 覆蓋率、stewardship 回應力、lineage 覆蓋率或 data subject 成長異常)。請用自然、友善的繁體中文簡短回覆,說明你能協助的範圍,並舉 1-2 個範例問題(例如「maturity 最高的三個 Domain?」、「本週進步最多的 Domain?」、「風險最高的資料集是哪些?」、「哪個 team 逾期最多?」)。一兩句話就好,不要用 Markdown 或項目符號;如果使用者的問題是打招呼,就自然回應打招呼再帶出範例。
 """
+
+
+def _extract_numbers(value, _depth: int = 0) -> set:
+    """Recursively pulls every number out of a string or a JSON-like
+    structure (dict/list/scalar), each rounded a few ways so reasonable
+    LLM rounding ("2.4" for a stored 2.43) still counts as a match. A list
+    also contributes its own length -- "found 3 results" is a legitimate
+    derived count, not a number that has to literally appear in the data.
+    Used by _reply_is_grounded() as the mechanical half of the
+    anti-hallucination check; _depth just guards against pathological
+    recursion, real payloads here are a handful of levels deep at most."""
+    numbers = set()
+    if _depth > 8:
+        return numbers
+    if isinstance(value, bool):
+        return numbers  # bool is a subclass of int -- explicitly excluded, True/False aren't "numbers" here
+    if isinstance(value, (int, float)):
+        f = float(value)
+        numbers.add(round(f))
+        numbers.add(round(f, 1))
+        numbers.add(round(f, 2))
+    elif isinstance(value, str):
+        for m in re.findall(r"-?\d+\.?\d*", value):
+            try:
+                numbers.add(round(float(m), 2))
+            except ValueError:
+                pass
+    elif isinstance(value, dict):
+        for v in value.values():
+            numbers |= _extract_numbers(v, _depth + 1)
+    elif isinstance(value, (list, tuple)):
+        numbers.add(len(value))
+        for v in value:
+            numbers |= _extract_numbers(v, _depth + 1)
+    return numbers
+
+
+def _reply_is_grounded(reply: str, data) -> bool:
+    """Mechanical safety net on top of _build_reply_prompt's "don't
+    fabricate" instruction -- extracts every number the LLM's phrased
+    reply states and confirms each one traces back (within a small
+    tolerance, for rounding) to the grounding data actually handed to it,
+    rather than just trusting the model followed instructions. Non-numeric
+    claims (names, categories) aren't checked here -- there's no cheap way
+    to fact-check free text the way there is for numbers, and the
+    grounding JSON being the model's only source of information already
+    constrains names reasonably well.
+
+    Known limitation: a fabricated number that happens to coincide with a
+    stray digit fragment elsewhere in the data (e.g. part of a serialized
+    date string) would pass. This is a heuristic safety net, not a proof --
+    it catches the common case (invented statistics) cheaply, it doesn't
+    replace the prompt instruction, it backstops it."""
+    reply_numbers = _extract_numbers(reply)
+    if not reply_numbers:
+        return True
+    allowed = _extract_numbers(data)
+    return all(any(abs(n - a) < 0.06 for a in allowed) for n in reply_numbers)
 
 
 async def stream_agent_reply(question: str) -> AsyncIterator[str]:
@@ -368,8 +553,14 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
     LLM phrasing pass on top of it -- data-grounded when the lookup found
     something, a "here's what I can help with" prompt when it didn't, so
     the on-prem model is in the loop for every reply, not just in-scope
-    ones. Either way, any LLM failure falls back to the deterministic
-    answer_text already computed above, so the reply is always correct."""
+    ones. Any LLM failure -- unreachable, or reachable but its reply
+    doesn't check out against _reply_is_grounded() -- falls back to the
+    deterministic answer_text already computed above, so the *persisted*
+    reply is always correct. (Tokens still stream live as they arrive, so
+    a user could see a brief flash of the ungrounded text before the
+    `final` event corrects it -- the frontend's onFinal always prefers
+    `evt.reply` over the accumulated stream, so what's actually left on
+    screen at the end is the verified one either way.)"""
     yield sse_event("step", text="正在查詢資料...")
     result = await classify_and_run(question)
     answer_text = result.get("answer_text", "")
@@ -388,5 +579,10 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
         yield sse_event("step", text=f"語言模型無法連線({e}),改用系統原始回覆。")
         reply = ""
 
-    final_reply = reply.strip() or answer_text
+    reply = reply.strip()
+    if reply and not _reply_is_grounded(reply, data):
+        yield sse_event("step", text="偵測到回覆內容可能與資料不符,改用系統原始回覆。")
+        reply = ""
+
+    final_reply = reply or answer_text
     yield sse_event("final", reply=final_reply, chart_directive=chart_directive, data=data)

@@ -27,6 +27,11 @@ INTENT_NAMES = [
     "domain_ranking",
     "subject_detail",
     "trend_over_time",
+    "risk_priority",
+    "ownership_coverage",
+    "stewardship",
+    "lineage_coverage",
+    "subject_growth",
     "unknown",
 ]
 
@@ -65,6 +70,16 @@ SYSTEM_PROMPT = """你是 IDG Data Quality Dashboard 的問題分類器。將使
   params: name_hint(該 data subject 的名稱或名稱片段)
 - trend_over_time: 查詢某個 domain(或全公司)過去的 maturity 歷史趨勢。
   params: domain(字串或 null,null 表示全公司)
+- risk_priority: 查詢「風險優先排序」——依「近期使用量 × 距離滿分的差距」排出最該優先處理的 data subject。適用於「風險最高的是哪些」「該優先處理誰」這類問題。
+  params: n(整數,預設 5,要看幾筆)
+- ownership_coverage: 查詢 Data Owner/Steward/IT Owner 的指派覆蓋率,整體或依 domain。適用於「ownership 覆蓋率多少」「哪個 domain 缺 owner 缺最多」這類問題。
+  params: {}
+- stewardship: 查詢各 Owner Team 處理 incident 的回應力(逾期件數、平均解決時間、誰回應最快)。適用於「哪個 team 逾期最多」「誰回應最快」這類問題。
+  params: {}
+- lineage_coverage: 查詢 lineage(資料血緣)覆蓋率,以及完全沒有 lineage 記錄的「孤島」資料集。適用於「哪些資料集沒有 lineage」「lineage 覆蓋率多少」這類問題。
+  params: {}
+- subject_growth: 查詢近期新增 data subject 是否有異常暴增的 domain(可能代表分類錯誤)。適用於「最近新增很多資料的 domain」「有沒有異常成長」這類問題。
+  params: {}
 - unknown: 問題不屬於以上任何一種,或者需要目前系統還沒有的統計。
   params: {}
 """
