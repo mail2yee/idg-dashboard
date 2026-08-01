@@ -45,10 +45,11 @@ export default function RiskPriorityChart() {
 
     return {
       animation: false,
-      grid: { left: 56, right: 24, top: 16, bottom: 56 },
+      grid: { left: 56, right: 24, top: 44, bottom: 56 },
       legend: {
         top: 0,
         left: 0,
+        itemHeight: 10,
         textStyle: { color: c.textSecondary, fontSize: 12, fontFamily: FONT_FAMILY },
         icon: 'circle',
       },
@@ -84,7 +85,7 @@ export default function RiskPriorityChart() {
               right: 28,
               bottom: 64,
               style: {
-                text: '⚠ 高使用量 × 低 Level\n優先處理區',
+                text: '高使用量 × 低 Level\n優先處理區',
                 fill: c.textMuted,
                 fontSize: 11,
                 fontFamily: FONT_FAMILY,

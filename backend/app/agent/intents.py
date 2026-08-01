@@ -370,7 +370,7 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
     the on-prem model is in the loop for every reply, not just in-scope
     ones. Either way, any LLM failure falls back to the deterministic
     answer_text already computed above, so the reply is always correct."""
-    yield sse_event("step", text="🔍 正在查詢資料...")
+    yield sse_event("step", text="正在查詢資料...")
     result = await classify_and_run(question)
     answer_text = result.get("answer_text", "")
     chart_directive = result.get("chart_directive")
@@ -378,14 +378,14 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
 
     prompt = _build_reply_prompt(question, result) if data else _build_fallback_prompt(question)
 
-    yield sse_event("step", text="💬 正在整理回覆...")
+    yield sse_event("step", text="正在整理回覆...")
     reply = ""
     try:
         async for piece in stream_chat_completion([{"role": "user", "content": prompt}]):
             reply += piece
             yield sse_event("token", text=piece)
     except Exception as e:
-        yield sse_event("step", text=f"⚠️ 語言模型無法連線({e}),改用系統原始回覆。")
+        yield sse_event("step", text=f"語言模型無法連線({e}),改用系統原始回覆。")
         reply = ""
 
     final_reply = reply.strip() or answer_text
