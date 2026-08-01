@@ -83,7 +83,7 @@ export default function HeadlineIndexCard() {
           )}
         </Stack>
         <Typography variant="caption" color="text.secondary">
-          {latest ? `平均 Level L${latest.avg_maturity_level.toFixed(1)} / L${maxLevel} · ${latest.subject_count} data subjects` : ''}
+          {latest ? `平均分數 ${latest.avg_maturity_level.toFixed(1)} / L${maxLevel} · ${latest.subject_count} data subjects` : ''}
         </Typography>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3 }}>
           計算方式:平均 Maturity Level ÷ L{maxLevel} × 100

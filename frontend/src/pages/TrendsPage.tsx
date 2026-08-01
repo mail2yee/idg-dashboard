@@ -255,12 +255,12 @@ export default function TrendsPage() {
       },
       {
         field: 'avg_maturity_level',
-        headerName: '目前 Level',
+        headerName: '目前分數',
         flex: 0.8,
         type: 'number',
         renderCell: (params) => (
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-            <Typography variant="body2">L{(params.value as number).toFixed(2)}</Typography>
+            <Typography variant="body2">{(params.value as number).toFixed(2)}</Typography>
           </Box>
         ),
       },

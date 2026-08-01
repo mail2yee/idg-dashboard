@@ -74,7 +74,7 @@ async def run_top_n_by_maturity(n: int = 3, group_by: str = "domain", descending
         ).sort("avg_maturity_level", order).limit(n).to_list(length=None)
         names = [d["domain"] for d in docs]
         answer = f"目前 data maturity {label}的 {n} 個 Domain 是:" + "、".join(
-            f"{d['domain']}(L{d['avg_maturity_level']:.1f})" for d in docs
+            f"{d['domain']}(分數 {d['avg_maturity_level']:.1f})" for d in docs
         )
         return {
             "answer_text": answer,
@@ -199,7 +199,7 @@ async def run_domain_ranking():
     docs = await db.org_quality_index_snapshots.find(
         {"scope_type": "DOMAIN", "snapshot_date": latest_date}
     ).sort("avg_maturity_level", -1).to_list(length=None)
-    answer = "各 Domain maturity 排名:" + "、".join(f"{d['domain']}(L{d['avg_maturity_level']:.1f})" for d in docs)
+    answer = "各 Domain maturity 排名:" + "、".join(f"{d['domain']}(分數 {d['avg_maturity_level']:.1f})" for d in docs)
     return {
         "answer_text": answer,
         "chart_directive": {"type": "show_domain_ranking"},

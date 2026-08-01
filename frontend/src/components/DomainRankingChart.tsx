@@ -33,7 +33,7 @@ export default function DomainRankingChart() {
       ...tooltipStyle(mode),
       formatter: (params: { name: string; value: number }[]) => {
         const d = sorted.find((x) => x.domain === params[0].name)
-        return `${params[0].name}: L${params[0].value} / L${maxLevel}<br/>WoW ${d ? (d.wow_delta >= 0 ? '+' : '') + d.wow_delta.toFixed(2) : ''}`
+        return `${params[0].name}: ${params[0].value} / L${maxLevel}<br/>WoW ${d ? (d.wow_delta >= 0 ? '+' : '') + d.wow_delta.toFixed(2) : ''}`
       },
     },
     xAxis: { type: 'value', min: 0, max: maxLevel, ...baseAxis(mode) },
@@ -63,7 +63,6 @@ export default function DomainRankingChart() {
         label: {
           show: true,
           position: 'right',
-          formatter: 'L{c}',
           color: c.textSecondary,
           fontSize: 12,
           fontFamily: FONT_FAMILY,
