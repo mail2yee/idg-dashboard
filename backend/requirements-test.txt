@@ -1,0 +1,7 @@
+# Test-only deps for the pytest integration suite (backend/tests/).
+# httpx is already in requirements.txt (used by the agent's LLM clients),
+# no need to repeat it here.
+#
+#   backend/.venv/bin/pip install -r backend/requirements-test.txt
+pytest==8.3.4
+pytest-asyncio==0.25.2
