@@ -3,6 +3,7 @@ import RiskPriorityChart from '../components/governance/RiskPriorityChart'
 import OwnershipCoverageCard from '../components/governance/OwnershipCoverageCard'
 import StewardshipCard from '../components/governance/StewardshipCard'
 import LineageCoverageCard from '../components/governance/LineageCoverageCard'
+import SubjectGrowthCard from '../components/governance/SubjectGrowthCard'
 
 export default function GovernancePage() {
   return (
@@ -23,6 +24,9 @@ export default function GovernancePage() {
         </Grid>
         <Grid size={12}>
           <LineageCoverageCard />
+        </Grid>
+        <Grid size={12}>
+          <SubjectGrowthCard />
         </Grid>
       </Grid>
     </Box>

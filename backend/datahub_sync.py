@@ -110,7 +110,7 @@ def stable_object_id(key: str) -> ObjectId:
     return ObjectId(hashlib.md5(key.encode()).hexdigest()[:24])
 
 
-def transform_subject(ds: dict, domain: str) -> dict:
+def transform_subject(ds: dict, domain: str, first_seen_at: datetime = None) -> dict:
     tag_names = [t["tag"]["properties"]["name"] for t in (ds.get("tags") or {}).get("tags", [])]
     has_api = "has-api" in tag_names
     visible_tags = [t for t in tag_names if t != "has-api"]
@@ -148,7 +148,11 @@ def transform_subject(ds: dict, domain: str) -> dict:
         "glossary_terms": glossary_terms,
         "is_deprecated": False,
         "status": "ACTIVE",
-        "created_at": datetime.now(timezone.utc),
+        # first time this urn was ever synced -- NOT "now" on every sync.
+        # governance_subject_growth (governance.py) depends on this being a
+        # real first-seen date to detect "new this week", not a timestamp
+        # that resets on every refresh.py run.
+        "created_at": first_seen_at or datetime.now(timezone.utc),
         "last_synced_at": datetime.now(timezone.utc),
         "_has_api": has_api,
         "_freshness_days": freshness_days,
@@ -316,6 +320,13 @@ def main():
     client = MongoClient(MONGO_URL)
     db = client[DB_NAME]
 
+    # snapshot existing created_at values before data_subjects gets wholesale
+    # -replaced below, so a urn we've already seen keeps its real first-seen
+    # date instead of it resetting to "now" on every sync.
+    first_seen_by_urn = {
+        s["datahub_urn"]: s["created_at"] for s in db.data_subjects.find({}, {"datahub_urn": 1, "created_at": 1})
+    }
+
     all_subjects = []
     all_schema_fields = []
     all_assertions = []
@@ -332,7 +343,7 @@ def main():
             if not ds:
                 print(f"  WARNING: {urn} not yet queryable (indexing lag?), skipping")
                 continue
-            subject = transform_subject(ds, domain)
+            subject = transform_subject(ds, domain, first_seen_by_urn.get(urn))
             all_subjects.append(subject)
             urn_to_subject[urn] = subject
 

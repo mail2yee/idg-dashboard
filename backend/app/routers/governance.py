@@ -249,3 +249,74 @@ async def governance_lineage_coverage():
         "islands": islands,
         "risk_hubs": hubs[:15],
     }
+
+
+NEW_SUBJECT_WINDOW_DAYS = 7
+NEW_SUBJECT_FLAG_THRESHOLD = 3
+GROWTH_TREND_WEEKS = 8
+
+
+@router.get("/governance/subject-growth")
+async def governance_subject_growth():
+    """Catalog hygiene, not data quality: a domain gaining an unusual number
+    of new data subjects in a short window is worth a manual look -- it can
+    be legitimate onboarding, but it can also be one table split into
+    several subjects, or subjects landing in the wrong domain. Flags on an
+    absolute count (not %) since most domains only have a handful of
+    subjects -- a percentage swing would be noisy at this scale.
+
+    created_at is only meaningful for this because datahub_sync.py
+    preserves each subject's real first-seen date across syncs instead of
+    resetting it to "now" every run."""
+    subjects = await db.data_subjects.find({}).to_list(length=None)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=NEW_SUBJECT_WINDOW_DAYS)
+
+    def is_new(s):
+        created = s.get("created_at")
+        if created and created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        return bool(created and created >= cutoff)
+
+    by_domain: dict = {}
+    for s in subjects:
+        row = by_domain.setdefault(s["domain"], {"current_count": 0, "new_subjects": []})
+        row["current_count"] += 1
+        if is_new(s):
+            row["new_subjects"].append({"id": str(s["_id"]), "name": s["name"]})
+
+    # per-domain weekly subject_count history, for a sparkline -- already
+    # accumulated by refresh.py's build_org_snapshots, nothing new to compute.
+    trend_docs = await db.org_quality_index_snapshots.find(
+        {"scope_type": "DOMAIN"}
+    ).sort("snapshot_date", 1).to_list(length=None)
+    trend_by_domain: dict = {}
+    for d in trend_docs:
+        trend_by_domain.setdefault(d["domain"], []).append(d["subject_count"])
+
+    domain_rows = []
+    for domain, row in by_domain.items():
+        new_count = len(row["new_subjects"])
+        domain_rows.append({
+            "domain": domain,
+            "current_count": row["current_count"],
+            "new_count": new_count,
+            "flagged": new_count >= NEW_SUBJECT_FLAG_THRESHOLD,
+            "new_subjects": row["new_subjects"],
+            "trend": trend_by_domain.get(domain, [])[-GROWTH_TREND_WEEKS:],
+        })
+    domain_rows.sort(key=lambda r: -r["new_count"])
+
+    global_trend_docs = await db.org_quality_index_snapshots.find(
+        {"scope_type": "GLOBAL"}
+    ).sort("snapshot_date", 1).to_list(length=None)
+    total_trend = [d["subject_count"] for d in global_trend_docs][-GROWTH_TREND_WEEKS:]
+
+    return {
+        "window_days": NEW_SUBJECT_WINDOW_DAYS,
+        "flag_threshold": NEW_SUBJECT_FLAG_THRESHOLD,
+        "total_subjects": len(subjects),
+        "new_subjects_total": sum(r["new_count"] for r in domain_rows),
+        "total_trend": total_trend,
+        "domains": domain_rows,
+        "flagged_domains": [r for r in domain_rows if r["flagged"]],
+    }

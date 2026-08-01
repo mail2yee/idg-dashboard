@@ -191,6 +191,28 @@ export interface LineageRiskHub {
   fan_out: number
   maturity_level: number
 }
+export interface NewSubjectEntry {
+  id: string
+  name: string
+}
+export interface SubjectGrowthDomainRow {
+  domain: string
+  current_count: number
+  new_count: number
+  flagged: boolean
+  new_subjects: NewSubjectEntry[]
+  trend: number[]
+}
+export interface SubjectGrowthResponse {
+  window_days: number
+  flag_threshold: number
+  total_subjects: number
+  new_subjects_total: number
+  total_trend: number[]
+  domains: SubjectGrowthDomainRow[]
+  flagged_domains: SubjectGrowthDomainRow[]
+}
+
 export interface LineageCoverageResponse {
   total_subjects: number
   covered: number
@@ -265,6 +287,7 @@ export const api = {
   governanceOwnershipCoverage: () => get<OwnershipCoverageResponse>('/governance/ownership-coverage'),
   governanceStewardship: () => get<StewardshipResponse>('/governance/stewardship'),
   governanceLineageCoverage: () => get<LineageCoverageResponse>('/governance/lineage-coverage'),
+  governanceSubjectGrowth: () => get<SubjectGrowthResponse>('/governance/subject-growth'),
 }
 
 export interface AgentChatCallbacks {
