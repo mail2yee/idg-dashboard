@@ -24,7 +24,7 @@ import re
 from typing import AsyncIterator, Optional
 
 from app.agent.llm_client import stream_chat_completion
-from app.agent.ollama_client import classify_intent
+from app.agent.ollama_client import TOOL_CALLING_SYSTEM_PROMPT, call_with_tools, classify_intent
 from app.db import db
 from app.routers.governance import (
     governance_lineage_coverage,
@@ -353,6 +353,51 @@ async def run_subject_growth():
     }
 
 
+# --- Tool-calling loop support (stream_agent_reply / /agent/chat only).
+# /agent/query keeps using _dispatch_llm_intent above, unchanged.
+
+
+async def _tool_risk_priority(n: int = 5):
+    # TOOL_DEFS uses "n" for consistency with every other tool's param
+    # naming, but run_risk_priority's own kwarg is "limit" (see
+    # _dispatch_llm_intent's equivalent translation above) -- this adapter
+    # exists purely to bridge that naming mismatch.
+    return await run_risk_priority(limit=n)
+
+
+TOOL_HANDLERS = {
+    "top_n_by_maturity": run_top_n_by_maturity,
+    "top_n_by_delta": run_top_n_by_delta,
+    "stagnant_domains": run_stagnant_domains,
+    "domain_ranking": run_domain_ranking,
+    "subject_detail": run_subject_detail,
+    "trend_over_time": run_trend_over_time,
+    "risk_priority": _tool_risk_priority,
+    "ownership_coverage": run_ownership_coverage,
+    "stewardship": run_stewardship,
+    "lineage_coverage": run_lineage_coverage,
+    "subject_growth": run_subject_growth,
+}
+
+# Exact-match cache of question -> [{"tool": name, "args": {...}}, ...] plan.
+# Deliberately never caches answer data (see module docstring additions
+# below) -- a cache hit only skips the tool-selection reasoning, each tool
+# is still re-executed live. In-memory and process-global on purpose: it
+# resets on every redeploy, which conveniently invalidates it whenever
+# TOOL_DEFS/prompts change too.
+_plan_cache: dict = {}
+
+
+async def _run_tool(name: str, args: dict):
+    handler = TOOL_HANDLERS.get(name)
+    if handler is None:
+        return None
+    try:
+        return await handler(**args)
+    except TypeError:
+        return None
+
+
 async def _dispatch_llm_intent(intent: str, params: dict):
     """Maps an LLM-classified intent to its whitelisted query function. The
     model only ever supplies an intent name (constrained to a fixed enum,
@@ -475,6 +520,31 @@ def _build_reply_prompt(question: str, result: dict) -> str:
 """
 
 
+def _build_multi_reply_prompt(question: str, tool_results: list) -> str:
+    """Like _build_reply_prompt, generalized for a turn that made 1+ tool
+    calls -- e.g. "who improved most, and who's their data owner" needs
+    top_n_by_delta then subject_detail, so there's no single canonical
+    `data`/`answer_text` to ground on, only a sequence of them."""
+    grounding = json.dumps(
+        [{"tool": r["tool"], "data": r["result"].get("data")} for r in tool_results],
+        ensure_ascii=False, default=str,
+    )
+    canned = "\n".join(r["result"].get("answer_text", "") for r in tool_results)
+    return f"""你是 IDG Data Quality Dashboard 的助理。使用者的問題是:「{question}」
+
+系統已經查詢好以下真實資料(JSON,是唯一可信的資料來源):
+{grounding}
+
+系統針對這些查詢原本產生的簡短答案:
+{canned}
+
+請用自然、友善的繁體中文,把這些答案整合成一段完整的回覆給使用者。規則:
+1. 只能使用上面提供的 JSON 資料,絕對不可以捏造任何數字、名稱或未提及的內容。
+2. 如果有多筆查詢結果,請把它們組織成連貫的一段話,不要逐條照唸。
+3. 不要使用 Markdown 或項目符號,純文字即可。
+"""
+
+
 def _build_fallback_prompt(question: str) -> str:
     """Used when the whitelisted lookup found no data (out-of-scope
     question, greeting, etc.) -- there's nothing to ground a data-grounded
@@ -546,28 +616,117 @@ def _reply_is_grounded(reply: str, data) -> bool:
     return all(any(abs(n - a) < 0.06 for a in allowed) for n in reply_numbers)
 
 
+MAX_TOOL_ROUNDS = 4
+
+
 async def stream_agent_reply(question: str) -> AsyncIterator[str]:
     """Async generator of SSE strings for the /agent/chat endpoint:
-    step -> token* -> final. The structured lookup (intent classification
-    + whitelisted Mongo query) is exactly classify_and_run(); this adds an
-    LLM phrasing pass on top of it -- data-grounded when the lookup found
-    something, a "here's what I can help with" prompt when it didn't, so
-    the on-prem model is in the loop for every reply, not just in-scope
-    ones. Any LLM failure -- unreachable, or reachable but its reply
-    doesn't check out against _reply_is_grounded() -- falls back to the
-    deterministic answer_text already computed above, so the *persisted*
-    reply is always correct. (Tokens still stream live as they arrive, so
-    a user could see a brief flash of the ungrounded text before the
-    `final` event corrects it -- the frontend's onFinal always prefers
-    `evt.reply` over the accumulated stream, so what's actually left on
-    screen at the end is the verified one either way.)"""
-    yield sse_event("step", text="正在查詢資料...")
-    result = await classify_and_run(question)
-    answer_text = result.get("answer_text", "")
-    chart_directive = result.get("chart_directive")
-    data = result.get("data")
+    step -> token* -> final.
 
-    prompt = _build_reply_prompt(question, result) if data else _build_fallback_prompt(question)
+    Unlike classify_and_run() (single-shot intent classification, still
+    used unchanged by /agent/query), this runs a bounded tool-calling loop
+    against the on-prem model so a question that needs *chaining* two or
+    more whitelisted lookups (e.g. "who improved most this week, and who's
+    their data owner") can actually be answered, rather than requiring
+    every such combination to be hardcoded as its own intent. An in-memory
+    exact-match cache (_plan_cache) remembers, per literal question string,
+    which tools were called last time -- a cache hit skips only the
+    tool-selection reasoning; each tool is still re-executed live so the
+    data itself is never stale.
+
+    Every tool result is a call into the same whitelisted run_* functions
+    intents.py has always used (no arbitrary query is ever LLM-written),
+    and the final natural-language phrasing pass is grounded and checked
+    exactly as before (_reply_is_grounded) -- any failure (unreachable
+    model, ungrounded reply) falls back to the deterministic answer_text(s)
+    already computed, so the *persisted* reply is always correct even
+    though tokens stream live before that check completes."""
+    q = question.strip()
+    cached_plan = _plan_cache.get(q)
+
+    tool_results: list = []  # [{"tool", "args", "result"}], successful calls only, in call order
+    seen_calls: dict = {}  # (tool, sorted-args-tuple) -> result, for in-request de-dup
+
+    async def execute_call(name: str, args: dict):
+        key = (name, tuple(sorted((args or {}).items())))
+        if key in seen_calls:
+            return seen_calls[key]
+        result = await _run_tool(name, args or {})
+        seen_calls[key] = result
+        if result is not None:
+            tool_results.append({"tool": name, "args": args or {}, "result": result})
+        return result
+
+    is_legacy_fallback = False
+
+    if cached_plan:
+        yield sse_event("step", text="正在查詢資料...")
+        for step in cached_plan:
+            await execute_call(step["tool"], step.get("args") or {})
+    else:
+        yield sse_event("step", text="正在查詢資料...")
+        messages = [
+            {"role": "system", "content": TOOL_CALLING_SYSTEM_PROMPT},
+            {"role": "user", "content": q},
+        ]
+        ollama_unreachable = False
+        for round_num in range(MAX_TOOL_ROUNDS):
+            message = await call_with_tools(messages)
+            if message is None:
+                ollama_unreachable = round_num == 0 and not tool_results
+                break
+
+            tool_calls = message.get("tool_calls") or []
+            if not tool_calls:
+                break  # model decided it has enough (or nothing to look up)
+
+            messages.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": tool_calls})
+            for tc in tool_calls:
+                fn = tc.get("function") or {}
+                name = fn.get("name")
+                raw_args = fn.get("arguments")
+                if isinstance(raw_args, str):
+                    try:
+                        args = json.loads(raw_args)
+                    except json.JSONDecodeError:
+                        args = {}
+                else:
+                    args = raw_args or {}
+                yield sse_event("step", text=f"正在查詢資料({name})...")
+                result = await execute_call(name, args)
+                messages.append({
+                    "role": "tool",
+                    "name": name,
+                    "content": json.dumps(result, ensure_ascii=False, default=str) if result is not None else "null",
+                })
+        else:
+            # Cap hit without the model stopping on its own -- proceed to
+            # the phrasing turn below with whatever's been gathered so far,
+            # rather than leaving the loop hanging.
+            yield sse_event("step", text="已達查詢上限,改用目前查到的資訊回答。")
+
+        if ollama_unreachable:
+            # Tool-selection model itself is unreachable and nothing was
+            # looked up yet -- fall back to the single-shot classifier path
+            # (classify_intent + keyword rules), same resilience contract
+            # /agent/query has always had.
+            is_legacy_fallback = True
+            legacy_result = await classify_and_run(q)
+            tool_results.append({"tool": "_legacy", "args": {}, "result": legacy_result})
+
+    chart_directive = None
+    for r in tool_results:
+        directive = r["result"].get("chart_directive")
+        if directive is not None:
+            chart_directive = directive
+
+    data = [r["result"].get("data") for r in tool_results] if tool_results else None
+    fallback_reply = "\n".join(r["result"].get("answer_text", "") for r in tool_results).strip()
+
+    if tool_results:
+        prompt = _build_multi_reply_prompt(q, tool_results)
+    else:
+        prompt = _build_fallback_prompt(q)
 
     yield sse_event("step", text="正在整理回覆...")
     reply = ""
@@ -584,5 +743,8 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
         yield sse_event("step", text="偵測到回覆內容可能與資料不符,改用系統原始回覆。")
         reply = ""
 
-    final_reply = reply or answer_text
+    final_reply = reply or fallback_reply
     yield sse_event("final", reply=final_reply, chart_directive=chart_directive, data=data)
+
+    if tool_results and not is_legacy_fallback:
+        _plan_cache[q] = [{"tool": r["tool"], "args": r["args"]} for r in tool_results]

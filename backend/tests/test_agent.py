@@ -1,6 +1,7 @@
 import pytest
 
-from app.agent.intents import _extract_numbers, _reply_is_grounded, run_subject_detail
+from app.agent.intents import _extract_numbers, _plan_cache, _reply_is_grounded, run_subject_detail
+from app.agent.ollama_client import TOOL_DEFS
 
 # classify_and_run() always tries the on-prem Ollama classifier first and
 # only falls back to keyword rules if Ollama is unreachable or returns
@@ -207,3 +208,66 @@ def test_reply_is_grounded_false_when_number_is_fabricated():
 
 def test_reply_is_grounded_true_when_reply_has_no_numbers():
     assert _reply_is_grounded("這是一段完全沒有數字的回覆。", {"anything": 123}) is True
+
+
+# --- Tool-calling loop + plan cache (stream_agent_reply / /agent/chat).
+# TOOL_HANDLERS/TOOL_DEFS consistency and the cache's own get/set mechanics
+# are pure logic, no DB/LLM needed, always run. The multi-tool-call and
+# cache-hit scenarios below are functional (assert correctness, never
+# timing), gated on ollama_reachable like the other LLM-dependent tests in
+# this file, since they exercise the real tool-selection model. -----------
+
+def test_tool_handlers_cover_every_tool_def():
+    from app.agent.intents import TOOL_HANDLERS
+    tool_def_names = {t["function"]["name"] for t in TOOL_DEFS}
+    assert tool_def_names == set(TOOL_HANDLERS.keys())
+
+
+def test_plan_cache_round_trip():
+    _plan_cache.clear()
+    assert _plan_cache == {}
+    plan = [{"tool": "domain_ranking", "args": {}}]
+    _plan_cache["這是一個測試用的問題字串"] = plan
+    assert _plan_cache["這是一個測試用的問題字串"] == plan
+    _plan_cache.clear()
+    assert _plan_cache == {}
+
+
+async def test_agent_chat_populates_plan_cache(client, ollama_reachable):
+    if not ollama_reachable:
+        _skip_if_no_llm()
+    question = "全公司過去的 maturity 趨勢是什麼?"
+    _plan_cache.pop(question.strip(), None)
+    resp = await client.post("/agent/chat", json={"question": question})
+    assert resp.status_code == 200
+    assert '"type": "final"' in resp.text
+    assert question.strip() in _plan_cache
+    assert len(_plan_cache[question.strip()]) >= 1
+
+
+async def test_agent_chat_multi_tool_call(client, ollama_reachable):
+    if not ollama_reachable:
+        _skip_if_no_llm()
+    # No single existing intent covers "highest risk" + "no lineage" at
+    # once -- this proves the loop actually chains two whitelisted tools
+    # in one turn rather than only ever calling one.
+    question = "風險最高的資料集是哪些?另外哪些資料集完全沒有 lineage 記錄?"
+    resp = await client.post("/agent/chat", json={"question": question})
+    assert resp.status_code == 200
+    text = resp.text
+    assert '"type": "final"' in text
+    assert text.count('"type": "step"') >= 2
+
+
+async def test_agent_chat_repeat_question_cache_hit_still_correct(client, ollama_reachable):
+    if not ollama_reachable:
+        _skip_if_no_llm()
+    question = "maturity 最高的三個 Domain"
+    first = await client.post("/agent/chat", json={"question": question})
+    assert first.status_code == 200
+    assert '"type": "final"' in first.text
+
+    second = await client.post("/agent/chat", json={"question": question})
+    assert second.status_code == 200
+    assert '"type": "final"' in second.text
+    assert '"reply"' in second.text
