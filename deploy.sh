@@ -14,6 +14,13 @@
 #       backend/.venv-datahub/bin/pip install -r backend/requirements-datahub.txt
 #   - At least one run of backend/datahub_ingest.py to populate DataHub with
 #     the fake scenario (only needed once, or after wiping DataHub's data)
+#
+# refresh.py's maturity-level history defaults to a fabricated demo history
+# (MATURITY_HISTORY_MODE=synthetic) -- set MATURITY_HISTORY_MODE=accumulate
+# instead (this script doesn't clear the environment, so it's inherited) to
+# get real accumulated history when pointed at a real company DataHub. See
+# README's "Real history at the company" section -- that mode needs its own
+# recurring schedule, not just this script.
 set -euo pipefail
 cd "$(dirname "$0")"
 

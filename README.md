@@ -187,6 +187,44 @@ Override with env vars before running `./deploy.sh`, e.g.
 | `LLM_BASE_URL` | `http://host.docker.internal:11434/v1` | Same as above (this is Ollama's OpenAI-compatible endpoint, same server, `/v1` suffix) |
 | `OLLAMA_MODEL` | `qwen2.5:latest` | Using a different tool-calling-capable local model |
 | `LLM_MODEL` | `qwen3:14b` | Using a different local model for phrasing |
+| `MATURITY_HISTORY_MODE` | `synthetic` | Pointing at a real company DataHub instead of the demo scenario — see "Real history at the company" below |
+
+### Real history at the company
+
+The demo scenario's Trends page shows a full year of history the moment you
+deploy — but that's only possible because it's fabricated: `refresh.py`
+defaults to **`synthetic` mode**, which deletes and regenerates a fake
+52-week backward random-walk ending at today's real score, every single
+run. That's fine for a self-contained demo, but a real company DataHub has
+no timeseries retention of its own — it can only ever say "here's the state
+right now" — so if you pointed the demo default at real company metadata,
+every trend line and WoW/MoM/YoY delta would still be fabricated, and would
+even fabricate a *different* fake past on every re-run.
+
+**`MATURITY_HISTORY_MODE=accumulate`** switches to the mode you actually
+want for real data: each run upserts exactly **one** real, dated snapshot
+(today's real score) per subject/domain/global, and never touches any
+previously-accumulated week — the same principle already used for
+`usage_stats`. Real history then only ever grows forward from whenever this
+starts running on a schedule; there's no way to retroactively invent real
+history DataHub itself never had, so the Trends page will look sparse (a
+single point, then two, then three...) until it's been running for a while.
+
+This needs a **recurring schedule**, separate from `./deploy.sh` (which also
+rebuilds/restarts the backend and frontend containers — unnecessary and
+disruptive to run just to sync data). Point a cron job / systemd timer /
+Task Scheduler entry directly at `refresh.py`:
+
+```bash
+# e.g. a daily cron entry:
+0 6 * * * cd /path/to/idg-dashboard/backend && \
+  MONGO_URL="mongodb://localhost:27018" MONGO_DB="idg_dashboard" MATURITY_HISTORY_MODE=accumulate \
+  .venv-datahub/bin/python3 refresh.py >> /var/log/idg-refresh.log 2>&1
+```
+
+`./deploy.sh` itself doesn't need to change — it doesn't clear the
+environment, so `MATURITY_HISTORY_MODE=accumulate ./deploy.sh` also works
+for a manual one-off run in this mode.
 
 ### Useful commands
 
@@ -309,3 +347,10 @@ backend/.venv-eval/bin/pytest -m eval -v
   by subject + day) rather than being replaced wholesale like the other
   synced collections — this is intentional, since the target DataHub
   instance has no timeseries retention and only ever reports "today."
+- Maturity-level history works the same way, but it's opt-in: by default
+  (`MATURITY_HISTORY_MODE=synthetic`) every `refresh.py` run **fabricates** a
+  fresh fake 52-week history ending at today's real score — fine for the
+  self-contained demo scenario, but not real history. See "Real history at
+  the company" above for the `accumulate` mode that actually preserves real
+  weeks going forward, and why it needs a recurring schedule rather than a
+  one-off `./deploy.sh`.

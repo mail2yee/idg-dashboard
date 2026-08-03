@@ -62,6 +62,23 @@ aren't obvious from reading the code once.
   reports "today." `backend/seed_usage_history.py` is a separate, optional,
   `$setOnInsert`-only backfill tool for previewing "lots of history" states
   — it never overwrites real accumulated days.
+- `maturity_snapshots`/`org_quality_index_snapshots` have the **same**
+  no-real-history problem as `usage_stats`, and `refresh.py` handles it via
+  a switch: `MATURITY_HISTORY_MODE` env var, default `"synthetic"` (deletes
+  and fabricates a fresh fake 52-week backward walk every run, ending at
+  today's real score — fine for the self-contained demo, not real history),
+  or `"accumulate"` (upserts exactly one real dated snapshot per subject/
+  domain/global per run, keyed by date, never touching prior weeks — same
+  principle as `usage_stats`). The accumulate-mode code lives entirely in
+  `refresh.py` (`build_current_maturity_snapshot`,
+  `upsert_accumulated_org_snapshot`) — `seed.py`'s
+  `build_maturity_snapshots`/`build_org_snapshots` are untouched and stay
+  the synthetic path only. **Gotcha already hit once**: `seed.week_start()`
+  returns a tz-aware datetime, but pymongo always reads datetimes back
+  naive — comparing the two with `!=` is silently *always* true in Python,
+  so any new code that reads `snapshot_date` back from Mongo to compare
+  against a freshly-computed `week_start(...)` must strip tzinfo first
+  (`.replace(tzinfo=None)`) or the comparison will never match.
 - Maturity scoring is config-driven: `backend/config/maturity_dimensions.json`
   (not hardcoded in `scoring.py`) — add a dimension there and every chart/
   badge/axis adapts automatically.
