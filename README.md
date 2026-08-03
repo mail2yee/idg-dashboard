@@ -39,6 +39,232 @@ sees anything the whitelisted tools didn't return.
   every chart, badge, and axis adapts automatically. See
   `backend/app/scoring.py`.
 
+## Architecture
+
+Three runtime containers (`docker-compose.deploy.yml`), plus two things that
+run on the host rather than in a container: the DataHub sync tooling (needs
+its own dependencies, see below) and Ollama (a system service, not
+something this project starts).
+
+```mermaid
+flowchart LR
+    subgraph Host["Host machine"]
+        DH[("DataHub\n(GMS + storage,\nseparate stack)")]
+        OL["Ollama\n(qwen2.5 + qwen3:14b)"]
+        RS["refresh.py\n(backend/.venv-datahub,\nrun manually or on a schedule)"]
+    end
+
+    subgraph Deploy["docker-compose.deploy.yml"]
+        FE["frontend container\n(nginx serving the\nVite build)"]
+        BE["backend container\n(FastAPI/uvicorn)"]
+        MG[("mongo container")]
+    end
+
+    Browser(["Browser"]) -->|"/ (static)"| FE
+    Browser -->|"/api/*"| FE
+    FE -->|proxy| BE
+    BE -->|motor, async| MG
+    BE -->|"HTTP (host.docker.internal)"| OL
+    RS -->|GraphQL| DH
+    RS -->|pymongo, sync| MG
+```
+
+- **`frontend` container** — nginx serving the static Vite build; also
+  reverse-proxies `/api/*` to the backend container (see
+  `frontend/nginx.conf`) so the browser only ever talks to one origin.
+- **`backend` container** — FastAPI/uvicorn, talks to Mongo via `motor`
+  (async) and to Ollama over HTTP. Stateless — it never writes to DataHub or
+  runs any sync itself; it only ever reads from Mongo.
+- **`mongo` container** — the only place current-state metadata and derived
+  history actually live. Nothing here is ephemeral/recomputed-on-read; every
+  router just queries pre-computed collections.
+- **DataHub** — a separate stack (its own GMS/storage/search containers,
+  either the project's own `datahub docker quickstart` or a shared company
+  instance), not part of `docker-compose.deploy.yml` at all. The backend
+  container never talks to DataHub directly — only the host-run sync tooling
+  does.
+- **Ollama** — a host-level system service (not a container this project
+  manages). The backend container reaches it via `host.docker.internal`
+  (see `OLLAMA_BASE_URL`/`LLM_BASE_URL` in the Configuration table below).
+
+### Directory layout
+
+```
+backend/
+  app/
+    main.py                 FastAPI app, router registration, CORS
+    db.py                   the one motor client (module-level global)
+    scoring.py               config-driven maturity scoring engine
+    util.py                  shared serialize()/compute_deltas() helpers
+    routers/                one file per resource (domains, subjects,
+                             teams, governance, maturity, config, agent)
+                             -- thin, read-only, all async
+    agent/
+      ollama_client.py       Ollama /api/chat wrappers (classify_intent,
+                              call_with_tools + TOOL_DEFS)
+      llm_client.py           Ollama OpenAI-compatible streaming client
+                              (final phrasing pass only)
+      intents.py              the 11 whitelisted run_* query functions,
+                              the tool-calling loop, the plan cache, the
+                              grounding check
+  datahub_client.py         thin GraphQL wrapper around DataHub's API
+  datahub_ingest.py         host-run: pushes the synthetic demo scenario
+                             into DataHub (acryl-datahub SDK)
+  datahub_sync.py            host-run: reads DataHub back into Mongo
+  refresh.py                 host-run: orchestrates sync + maturity
+                             history (synthetic or accumulate mode)
+  seed.py                    pure-Faker seeding (local dev / tests only)
+                             + shared constants/helpers reused by the
+                             DataHub path
+  config/
+    maturity_dimensions.json   the scoring config scoring.py reads
+  tests/                     fast integration suite (default `pytest`)
+  tests/eval/                 deepeval golden-set suite (opt-in, `-m eval`)
+
+frontend/
+  src/
+    App.tsx                  top-level layout, tab switching (no router
+                             -- tabs are plain component swaps)
+    api/client.ts             typed fetch wrappers, one per backend
+                             endpoint, plus the /agent/chat SSE parser
+    pages/                    one component per tab (Overview, Trends,
+                             KpiBreakdown, Governance)
+    components/                charts and shared widgets;
+                             components/governance/ holds the Governance
+                             Health page's cards
+    state/store.ts             zustand store (theme mode, config, drawer
+                             selection -- deliberately small, most state
+                             is local to each page)
+    theme/                    the dataviz-skill-derived palette, ECharts
+                             theme helpers, MUI theme
+```
+
+## Program flow
+
+### 1. Data ingestion & sync (host-run, not in any container)
+
+```
+datahub_ingest.py  →  DataHub (GMS)  →  datahub_sync.py  →  Mongo
+     (once, or after                      (refresh.py orchestrates
+      a data-loss event)                   both sync + history)
+```
+
+- `datahub_ingest.py` pushes a synthetic scenario (6 domains × 7 subjects,
+  schemas, lineage, assertions, incidents, usage) into DataHub via the
+  `acryl-datahub` SDK's `emit()` calls. Entity URNs are **deterministic**
+  (`uuid5`, not `uuid4()`) so re-running upserts the same entities instead
+  of duplicating them — this matters because DataHub's own daily
+  garbage-collection job permanently purges anything it thinks was removed
+  (see Known constraints). This step is what you'd swap out to point at
+  real company metadata instead — nothing downstream needs to know or care
+  where DataHub's data actually came from.
+- `datahub_sync.py` reads current state back out via GraphQL
+  (`datahub_client.py`'s thin wrapper) and **wholesale-replaces** most Mongo
+  collections (`data_subjects`, `schema_fields`, `lineage_edges`,
+  `assertions`, `incidents`) — DataHub only ever has "now," so there's
+  nothing to merge. `usage_stats` is the one exception: it's **upserted**
+  (keyed by subject + day), because the target DataHub instance has no
+  timeseries retention and only ever reports "today's" usage point, so real
+  accumulation has to happen on this side, one sync at a time.
+- `refresh.py` is the single entrypoint: call `datahub_sync.main()`, then
+  either regenerate a fake 52-week maturity history (`synthetic` mode,
+  default) or upsert this week's one real point (`accumulate` mode) — see
+  "Real history at the company" above for why both exist.
+
+### 2. A page load (browser → data)
+
+```
+Browser → GET /                 → frontend container serves the built SPA
+Browser → GET /api/domains/...  → frontend (nginx) proxies → backend → Mongo
+```
+
+Every page follows the same shape: a React page component's `useEffect`
+calls one or more typed functions in `frontend/src/api/client.ts`, each of
+which hits one FastAPI router endpoint that does a handful of `motor`
+queries against already-synced/already-computed Mongo collections and
+returns JSON — **no request-time computation of maturity scores or
+history**; that's all precomputed by `refresh.py` ahead of time. Routers are
+intentionally thin and stateless; `app/scoring.py` and `app/util.py` hold
+the only real logic (config-driven dimension scoring, delta math), shared
+across routers so e.g. a domain's WoW delta and a subject's WoW delta are
+computed identically.
+
+### 3. The AI agent — two distinct paths
+
+**`POST /api/agent/query`** (single-shot, used by anything that just needs
+one deterministic lookup):
+```
+question → ollama_client.classify_intent()   (structured-output /api/chat,
+                                                picks 1 of 11 intent names
+                                                + typed params -- never a
+                                                free-text query)
+         → intents._dispatch_llm_intent()     (maps intent name → one of
+                                                the 11 whitelisted run_*
+                                                functions)
+         → a hardcoded Mongo query             (the only thing that ever
+                                                touches the database)
+         → {answer_text, chart_directive, data}
+```
+Falls back to a small keyword classifier (`_classify_and_run_keywords`) if
+Ollama is unreachable or returns "unknown."
+
+**`POST /api/agent/chat`** (streamed via SSE, used by the chat panel;
+handles multi-part questions the single-shot path can't):
+```
+question → exact-match plan cache lookup (intents._plan_cache)
+    │
+    ├─ cache hit  → re-execute the cached tool list live (data is never
+    │               cached, only which tools to call)
+    │
+    └─ cache miss → bounded tool-calling loop (≤ 4 rounds):
+                      ollama_client.call_with_tools() → model requests
+                      0+ of the 11 whitelisted tools (TOOL_DEFS) → each
+                      dispatched via TOOL_HANDLERS to the same run_*
+                      functions /agent/query uses → results fed back to
+                      the model → repeat until it stops requesting tools
+                      or the round cap forces a stop
+    │
+    ▼
+llm_client.stream_chat_completion()  (qwen3:14b, tools NOT offered here --
+                                       forced to produce text, not another
+                                       call; streams token-by-token as SSE)
+    │
+    ▼
+intents._reply_is_grounded()  (mechanical check: every number in the
+                                phrased reply must trace back to the real
+                                tool data within a small tolerance)
+    │
+    ├─ grounded     → stream that reply, cache the tool plan used (only if
+    │                 1+ tools were called)
+    └─ not grounded → fall back to the deterministic answer_text(s) the
+                       tools themselves already produced -- the persisted
+                       reply is always correct even if the phrasing model
+                       hallucinated
+```
+
+The model **never writes a database query** in either path — it only ever
+picks from a fixed, typed set of 11 pre-built lookups. See the AI agent
+bullet under Stack above and `CLAUDE.md` for more.
+
+### 4. Maturity scoring (how a single number gets computed)
+
+```
+raw signals (schema completeness, lineage edges, assertion pass rate,
+freshness, ownership, ...)
+    → app/scoring.py: compute_dimension_scores(context)   (5 continuous
+                                                              0-1 KPI scores,
+                                                              config-driven
+                                                              from
+                                                              maturity_dimensions.json)
+    → compute_maturity_level(context)                     (the headline
+                                                              L1-L5 ladder
+                                                              value)
+```
+This computation is identical regardless of history mode or where the
+current-state inputs came from (real DataHub sync or `seed.py`'s Faker
+data) — only what happens to the *result* differs (stored as one of 52 fake
+historical points, or upserted as this week's one real point).
+
 ## Company / on-prem installation (fresh environment)
 
 A complete runbook for standing this up on a new machine — e.g. a company
