@@ -182,6 +182,11 @@ export default function TrendsPage() {
           lineStyle: { width: 2 },
           showSymbol: false,
           z: 10,
+          // Same name + same data as the bar series above -- an axis-
+          // triggered tooltip shows every series regardless of name
+          // collisions, so without this each level would show up twice
+          // (once from the bar, once from this purely-visual line echo).
+          tooltip: { show: false },
         })),
       ],
     }

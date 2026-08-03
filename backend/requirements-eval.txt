@@ -1,0 +1,25 @@
+# Eval-only deps for the deepeval-based, LLM-judged golden-set suite
+# (backend/tests/eval/). Separate from requirements-test.txt so the fast,
+# deterministic integration suite keeps working for anyone who hasn't
+# installed this -- pytest.ini defaults to `-m "not eval"` and
+# tests/eval/conftest.py import-skips gracefully if deepeval isn't
+# installed, but installing it is required to actually run `pytest -m eval`.
+#
+# deepeval needs a newer pydantic than requirements.txt pins for the app
+# (2.10.3, chosen for app reproducibility, not because the app needs
+# exactly that version) -- installing this into the same backend/.venv
+# used for the app/fast-suite would silently upgrade pydantic app-wide.
+# Use a dedicated venv instead, same pattern as backend/.venv-datahub:
+#
+#   python3 -m venv backend/.venv-eval
+#   backend/.venv-eval/bin/pip install -r backend/requirements-eval.txt \
+#     -r backend/requirements-test.txt fastapi "uvicorn[standard]" motor Faker python-dotenv httpx
+#
+# (installed together in one resolver pass, unpinned, rather than via
+# requirements.txt's exact pins, so pip can pick versions compatible with
+# deepeval's newer pydantic -- confirmed `from app.main import app` still
+# imports cleanly under the resulting stack.)
+#
+#   backend/.venv-eval/bin/pytest -m eval -v
+deepeval==4.1.5
+ollama==0.6.2

@@ -743,8 +743,12 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
         yield sse_event("step", text="偵測到回覆內容可能與資料不符,改用系統原始回覆。")
         reply = ""
 
+    tools_called = [r["tool"] for r in tool_results if r["tool"] != "_legacy"]
+
     final_reply = reply or fallback_reply
-    yield sse_event("final", reply=final_reply, chart_directive=chart_directive, data=data)
+    yield sse_event(
+        "final", reply=final_reply, chart_directive=chart_directive, data=data, tools_called=tools_called
+    )
 
     if tool_results and not is_legacy_fallback:
         _plan_cache[q] = [{"tool": r["tool"], "args": r["args"]} for r in tool_results]
