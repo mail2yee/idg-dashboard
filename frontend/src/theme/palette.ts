@@ -48,7 +48,7 @@ export type Mode = 'light' | 'dark'
 
 // Fixed domain -> categorical slot assignment so a domain keeps its color
 // across every chart and every filter state (color follows the entity).
-export const DOMAIN_ORDER = ['Finance', 'Sales', 'Platform', 'Marketing', 'Product', 'Risk']
+export const DOMAIN_ORDER = ['CPIS', 'Sales', 'Platform', 'Marketing', 'Product', 'Risk']
 
 export function domainColor(domain: string, mode: Mode): string {
   const idx = DOMAIN_ORDER.indexOf(domain)
