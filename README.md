@@ -580,3 +580,20 @@ backend/.venv-eval/bin/pytest -m eval -v
   the company" above for the `accumulate` mode that actually preserves real
   weeks going forward, and why it needs a recurring schedule rather than a
   one-off `./deploy.sh`.
+- **If you rename the domains** (`seed.py`'s `DOMAINS` list, or whatever
+  domains your real DataHub metadata uses), you must also update
+  **`frontend/src/theme/palette.ts`'s `DOMAIN_ORDER`** — it's a separate,
+  hardcoded list (`['Finance', 'Sales', 'Platform', 'Marketing', 'Product',
+  'Risk']` by default) that exists purely so a domain keeps the same chart
+  color everywhere (the `dataviz` skill's "fixed order, never cycled" rule).
+  It is **not** derived from `seed.py`/DataHub automatically. Three places
+  build their data by intersecting real domains against this fixed list
+  (`RiskPriorityChart.tsx`, the Trends page's domain filter dropdown,
+  `LeaderboardSection.tsx`'s domain ranking) — if none of your renamed
+  domains match any entry in `DOMAIN_ORDER`, the intersection comes back
+  empty and those three UI pieces silently render with **zero data**, even
+  though every other page (which reads domains straight from the API, not
+  through this list) looks completely normal. Fix: edit `DOMAIN_ORDER` to
+  the exact domain name strings actually stored in `data_subjects.domain`
+  (case-sensitive), in whatever order you want their chart colors assigned,
+  then rebuild the frontend (`./deploy.sh`).

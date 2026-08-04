@@ -29,6 +29,21 @@ aren't obvious from reading the code once.
 - Follow the `dataviz` skill's conventions for any chart work (categorical
   color order, legend spacing, hairline gridlines, the six-check palette
   validator, etc.) — don't freehand chart styling.
+- **`frontend/src/theme/palette.ts`'s `DOMAIN_ORDER` is a hardcoded list,
+  not derived from `seed.py`/DataHub.** It exists only so a domain keeps
+  the same chart color everywhere (dataviz's "fixed order, never cycled"
+  rule), but three places (`RiskPriorityChart.tsx`, the Trends page's
+  domain filter dropdown, `LeaderboardSection.tsx`'s domain ranking) build
+  their rendered data by **intersecting** real domains against this list —
+  a domain not in `DOMAIN_ORDER` doesn't fall back to some default color in
+  those three, it silently renders with **zero data**, while every other
+  page (reading domains straight from the API) looks completely normal.
+  Confirmed and reproduced live: renaming a domain in `seed.py` without
+  updating `DOMAIN_ORDER` to match produces exactly this symptom. If you
+  ever touch domain names (in `seed.py`, or because a real DataHub's
+  domains differ), `DOMAIN_ORDER` must be updated to the same exact
+  (case-sensitive) strings, or check whether it's worth deriving this list
+  from the API dynamically instead of keeping two hand-synced sources.
 - **Maturity Level display convention**: a single entity's Maturity Level
   keeps the `L` prefix (`L3`, `L4.2` is meaningless — it's a discrete,
   CMMI-style rung). An **averaged/aggregate** value across multiple entities
