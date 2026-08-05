@@ -73,7 +73,7 @@ async def _latest_domain_snapshot_date():
     return doc["snapshot_date"] if doc else None
 
 
-async def run_top_n_by_maturity(n: int = 3, group_by: str = "domain", descending: bool = True):
+async def run_top_n_by_maturity(n: int = 3, group_by: str = "domain", descending: bool = True, lang: str = "zh"):
     order = -1 if descending else 1
     label = "最高" if descending else "最低"
 
@@ -83,9 +83,15 @@ async def run_top_n_by_maturity(n: int = 3, group_by: str = "domain", descending
             {"scope_type": "DOMAIN", "snapshot_date": latest_date}
         ).sort("avg_maturity_level", order).limit(n).to_list(length=None)
         names = [d["domain"] for d in docs]
-        answer = f"目前 data maturity {label}的 {n} 個 Domain 是:" + "、".join(
-            f"{d['domain']}(分數 {d['avg_maturity_level']:.1f})" for d in docs
-        )
+        if lang == "en":
+            label_en = "highest" if descending else "lowest"
+            answer = f"The {n} Domains with the {label_en} current data maturity are: " + ", ".join(
+                f"{d['domain']} (score {d['avg_maturity_level']:.1f})" for d in docs
+            )
+        else:
+            answer = f"目前 data maturity {label}的 {n} 個 Domain 是:" + "、".join(
+                f"{d['domain']}(分數 {d['avg_maturity_level']:.1f})" for d in docs
+            )
         return {
             "answer_text": answer,
             "chart_directive": {"type": "highlight_domains", "domains": names},
@@ -100,11 +106,19 @@ async def run_top_n_by_maturity(n: int = 3, group_by: str = "domain", descending
     subject_ids = [d["subject_id"] for d in docs]
     subjects = await db.data_subjects.find({"_id": {"$in": subject_ids}}).to_list(length=None)
     subj_by_id = {s["_id"]: s for s in subjects}
-    answer_parts = [
-        f"{subj_by_id[d['subject_id']]['name']}(L{d['maturity_level']})"
-        for d in docs if d["subject_id"] in subj_by_id
-    ]
-    answer = f"目前 maturity {label}的 {n} 個 data subject 是:" + "、".join(answer_parts)
+    if lang == "en":
+        label_en = "highest" if descending else "lowest"
+        answer_parts = [
+            f"{subj_by_id[d['subject_id']]['name']} (L{d['maturity_level']})"
+            for d in docs if d["subject_id"] in subj_by_id
+        ]
+        answer = f"The {n} data subjects with the {label_en} maturity level are: " + ", ".join(answer_parts)
+    else:
+        answer_parts = [
+            f"{subj_by_id[d['subject_id']]['name']}(L{d['maturity_level']})"
+            for d in docs if d["subject_id"] in subj_by_id
+        ]
+        answer = f"目前 maturity {label}的 {n} 個 data subject 是:" + "、".join(answer_parts)
     return {
         "answer_text": answer,
         "chart_directive": {"type": "highlight_subjects", "subject_ids": [str(i) for i in subject_ids]},
@@ -116,7 +130,12 @@ PERIOD_DELTA_FIELD = {"week": "wow_delta", "month": "mom_delta", "year": "yoy_de
 PERIOD_LABEL = {"week": "這週", "month": "這個月", "year": "這一年"}
 
 
-async def run_top_n_by_delta(n: int = 3, period: str = "week", group_by: str = "domain", descending: bool = True):
+PERIOD_LABEL_EN = {"week": "this week", "month": "this month", "year": "this year"}
+
+
+async def run_top_n_by_delta(
+    n: int = 3, period: str = "week", group_by: str = "domain", descending: bool = True, lang: str = "zh"
+):
     """Ranks by *change* over the given period (wow/mom/yoy delta), not by
     absolute level -- this is what distinguishes it from top_n_by_maturity,
     which the old keyword classifier couldn't tell apart from "who improved
@@ -125,15 +144,22 @@ async def run_top_n_by_delta(n: int = 3, period: str = "week", group_by: str = "
     order = -1 if descending else 1
     verb = "進步" if descending else "退步"
     period_label = PERIOD_LABEL.get(period, "這週")
+    verb_en = "improved" if descending else "declined"
+    period_label_en = PERIOD_LABEL_EN.get(period, "this week")
 
     if group_by == "domain":
         latest_date = await _latest_domain_snapshot_date()
         docs = await db.org_quality_index_snapshots.find(
             {"scope_type": "DOMAIN", "snapshot_date": latest_date}
         ).sort(delta_field, order).limit(n).to_list(length=None)
-        answer = f"{period_label}{verb}最多的 {n} 個 Domain 是:" + "、".join(
-            f"{d['domain']}({d[delta_field]:+.2f})" for d in docs
-        )
+        if lang == "en":
+            answer = f"The {n} Domains that {verb_en} the most {period_label_en} are: " + ", ".join(
+                f"{d['domain']} ({d[delta_field]:+.2f})" for d in docs
+            )
+        else:
+            answer = f"{period_label}{verb}最多的 {n} 個 Domain 是:" + "、".join(
+                f"{d['domain']}({d[delta_field]:+.2f})" for d in docs
+            )
         return {
             "answer_text": answer,
             "chart_directive": {"type": "highlight_domains", "domains": [d["domain"] for d in docs]},
@@ -164,9 +190,14 @@ async def run_top_n_by_delta(n: int = 3, period: str = "week", group_by: str = "
         })
     ranked.sort(key=lambda x: x["delta"], reverse=descending)
     top = ranked[:n]
-    answer = f"{period_label}{verb}最多的 {n} 個 data subject 是:" + "、".join(
-        f"{d['name']}({d['delta']:+.2f})" for d in top
-    )
+    if lang == "en":
+        answer = f"The {n} data subjects that {verb_en} the most {period_label_en} are: " + ", ".join(
+            f"{d['name']} ({d['delta']:+.2f})" for d in top
+        )
+    else:
+        answer = f"{period_label}{verb}最多的 {n} 個 data subject 是:" + "、".join(
+            f"{d['name']}({d['delta']:+.2f})" for d in top
+        )
     return {
         "answer_text": answer,
         "chart_directive": {"type": "highlight_subjects", "subject_ids": [d["id"] for d in top]},
@@ -174,7 +205,7 @@ async def run_top_n_by_delta(n: int = 3, period: str = "week", group_by: str = "
     }
 
 
-async def run_stagnant_domains(months: int = 2):
+async def run_stagnant_domains(months: int = 2, lang: str = "zh"):
     """Domains whose avg_maturity_level did not increase across each of the
     trailing N independent 4-week (month) windows -- checked window by
     window against the weekly series, rather than trusting a single stored
@@ -193,10 +224,16 @@ async def run_stagnant_domains(months: int = 2):
         if all(series[-1 - i * 4] <= series[-1 - (i + 1) * 4] for i in range(months)):
             stagnant.append(domain)
 
-    if stagnant:
-        answer = f"連續 {months} 個月都沒有進步的 Domain 是:" + "、".join(stagnant)
+    if lang == "en":
+        if stagnant:
+            answer = f"Domains with no improvement for {months} consecutive months: " + ", ".join(stagnant)
+        else:
+            answer = f"No Domain has gone {months} consecutive months without improvement right now."
     else:
-        answer = f"目前沒有連續 {months} 個月都沒有進步的 Domain。"
+        if stagnant:
+            answer = f"連續 {months} 個月都沒有進步的 Domain 是:" + "、".join(stagnant)
+        else:
+            answer = f"目前沒有連續 {months} 個月都沒有進步的 Domain。"
     return {
         "answer_text": answer,
         "chart_directive": {"type": "highlight_domains", "domains": stagnant},
@@ -204,12 +241,17 @@ async def run_stagnant_domains(months: int = 2):
     }
 
 
-async def run_domain_ranking():
+async def run_domain_ranking(lang: str = "zh"):
     latest_date = await _latest_domain_snapshot_date()
     docs = await db.org_quality_index_snapshots.find(
         {"scope_type": "DOMAIN", "snapshot_date": latest_date}
     ).sort("avg_maturity_level", -1).to_list(length=None)
-    answer = "各 Domain maturity 排名:" + "、".join(f"{d['domain']}(分數 {d['avg_maturity_level']:.1f})" for d in docs)
+    if lang == "en":
+        answer = "Domain maturity ranking: " + ", ".join(
+            f"{d['domain']} (score {d['avg_maturity_level']:.1f})" for d in docs
+        )
+    else:
+        answer = "各 Domain maturity 排名:" + "、".join(f"{d['domain']}(分數 {d['avg_maturity_level']:.1f})" for d in docs)
     return {
         "answer_text": answer,
         "chart_directive": {"type": "show_domain_ranking"},
@@ -217,33 +259,46 @@ async def run_domain_ranking():
     }
 
 
-async def run_subject_detail(name_hint: str):
+async def run_subject_detail(name_hint: str, lang: str = "zh"):
     matches = await db.data_subjects.find(
         {"name": {"$regex": re.escape(name_hint), "$options": "i"}}
     ).to_list(length=None)
     if not matches:
-        return {
-            "answer_text": f"找不到名稱包含「{name_hint}」的 data subject。",
-            "chart_directive": None,
-            "data": None,
-        }
+        answer = (
+            f'No data subject found with a name matching "{name_hint}".'
+            if lang == "en"
+            else f"找不到名稱包含「{name_hint}」的 data subject。"
+        )
+        return {"answer_text": answer, "chart_directive": None, "data": None}
     if len(matches) > 1:
         # Silently picking the first match would mean confidently
         # describing the wrong data subject whenever the hint is generic
         # (e.g. a table-name prefix several subjects share) -- surfacing
         # the ambiguity instead of guessing is the whole point of this
         # disambiguation path.
-        names = "、".join(m["name"] for m in matches[:8])
-        more = f"等 {len(matches)} 個" if len(matches) > 8 else ""
-        answer = f"找到 {len(matches)} 個名稱包含「{name_hint}」的 data subject,不確定您指的是哪一個:{names}{more}。可以提供更完整的名稱嗎?"
+        if lang == "en":
+            names = ", ".join(m["name"] for m in matches[:8])
+            more = f" and {len(matches) - 8} more" if len(matches) > 8 else ""
+            answer = (
+                f'Found {len(matches)} data subjects matching "{name_hint}", not sure which one you mean: '
+                f"{names}{more}. Could you give a more complete name?"
+            )
+        else:
+            names = "、".join(m["name"] for m in matches[:8])
+            more = f"等 {len(matches)} 個" if len(matches) > 8 else ""
+            answer = f"找到 {len(matches)} 個名稱包含「{name_hint}」的 data subject,不確定您指的是哪一個:{names}{more}。可以提供更完整的名稱嗎?"
         return {"answer_text": answer, "chart_directive": None, "data": None}
 
     subject = matches[0]
     latest_date_doc = await db.maturity_snapshots.find_one(sort=[("snapshot_date", -1)])
     latest_date = latest_date_doc["snapshot_date"] if latest_date_doc else None
     snapshot = await db.maturity_snapshots.find_one({"subject_id": subject["_id"], "snapshot_date": latest_date})
-    level = f"L{snapshot['maturity_level']}" if snapshot else "未知"
-    answer = f"{subject['name']}(domain: {subject['domain']})目前 maturity level 為 {level}。"
+    if lang == "en":
+        level = f"L{snapshot['maturity_level']}" if snapshot else "unknown"
+        answer = f"{subject['name']} (domain: {subject['domain']}) is currently at maturity level {level}."
+    else:
+        level = f"L{snapshot['maturity_level']}" if snapshot else "未知"
+        answer = f"{subject['name']}(domain: {subject['domain']})目前 maturity level 為 {level}。"
     return {
         "answer_text": answer,
         "chart_directive": {"type": "open_subject_detail", "subject_id": str(subject["_id"])},
@@ -251,13 +306,17 @@ async def run_subject_detail(name_hint: str):
     }
 
 
-async def run_trend_over_time(domain: Optional[str] = None):
+async def run_trend_over_time(domain: Optional[str] = None, lang: str = "zh"):
     match = {"scope_type": "DOMAIN" if domain else "GLOBAL"}
     if domain:
         match["domain"] = domain
     docs = await db.org_quality_index_snapshots.find(match).sort("snapshot_date", 1).to_list(length=None)
-    scope_label = domain or "全公司"
-    answer = f"{scope_label} 過去 {len(docs)} 週的 maturity 趨勢已更新在圖表上。"
+    if lang == "en":
+        scope_label = domain or "the whole company"
+        answer = f"The maturity trend for {scope_label} over the past {len(docs)} weeks has been updated on the chart."
+    else:
+        scope_label = domain or "全公司"
+        answer = f"{scope_label} 過去 {len(docs)} 週的 maturity 趨勢已更新在圖表上。"
     return {
         "answer_text": answer,
         "chart_directive": {"type": "show_trend", "domain": domain},
@@ -277,18 +336,24 @@ async def run_trend_over_time(domain: Optional[str] = None):
 # inherit that correctness for free.
 
 
-async def run_risk_priority(limit: int = 5):
+async def run_risk_priority(limit: int = 5, lang: str = "zh"):
     result = await governance_risk_priority(limit=limit)
     top = result["top_risk"][:limit]
     if not top:
-        return {
-            "answer_text": "目前使用量資料還在累積中,還不足以計算風險優先排序。",
-            "chart_directive": None,
-            "data": result,
-        }
-    answer = f"風險優先排序前 {len(top)} 個資料集是:" + "、".join(
-        f"{r['name']}({r['domain']}, 風險分數 {r['risk_score']})" for r in top
-    )
+        answer = (
+            "Usage history is still accumulating -- not enough data yet to compute risk priority."
+            if lang == "en"
+            else "目前使用量資料還在累積中,還不足以計算風險優先排序。"
+        )
+        return {"answer_text": answer, "chart_directive": None, "data": result}
+    if lang == "en":
+        answer = f"The top {len(top)} highest-risk datasets are: " + ", ".join(
+            f"{r['name']} ({r['domain']}, risk score {r['risk_score']})" for r in top
+        )
+    else:
+        answer = f"風險優先排序前 {len(top)} 個資料集是:" + "、".join(
+            f"{r['name']}({r['domain']}, 風險分數 {r['risk_score']})" for r in top
+        )
     return {
         "answer_text": answer,
         "chart_directive": {"type": "highlight_subjects", "subject_ids": [r["id"] for r in top]},
@@ -296,15 +361,23 @@ async def run_risk_priority(limit: int = 5):
     }
 
 
-async def run_ownership_coverage():
+async def run_ownership_coverage(lang: str = "zh"):
     result = await governance_ownership_coverage()
-    answer = (
-        f"全公司 Ownership 覆蓋率為 {result['coverage_pct']}%"
-        f"({result['fully_covered']}/{result['total_subjects']} 個 data subject 三個角色都已指派)。"
-    )
     worst = min(result["by_domain"], key=lambda d: d["coverage_pct"]) if result["by_domain"] else None
-    if worst:
-        answer += f" 覆蓋率最低的是 {worst['domain']}({worst['coverage_pct']}%)。"
+    if lang == "en":
+        answer = (
+            f"Company-wide Ownership coverage is {result['coverage_pct']}% "
+            f"({result['fully_covered']}/{result['total_subjects']} data subjects have all three roles assigned)."
+        )
+        if worst:
+            answer += f" {worst['domain']} has the lowest coverage ({worst['coverage_pct']}%)."
+    else:
+        answer = (
+            f"全公司 Ownership 覆蓋率為 {result['coverage_pct']}%"
+            f"({result['fully_covered']}/{result['total_subjects']} 個 data subject 三個角色都已指派)。"
+        )
+        if worst:
+            answer += f" 覆蓋率最低的是 {worst['domain']}({worst['coverage_pct']}%)。"
     return {
         "answer_text": answer,
         "chart_directive": {"type": "highlight_domains", "domains": [worst["domain"]]} if worst else None,
@@ -312,25 +385,37 @@ async def run_ownership_coverage():
     }
 
 
-async def run_stewardship():
+async def run_stewardship(lang: str = "zh"):
     result = await governance_stewardship()
     teams = result["teams"]
     if not teams:
-        return {"answer_text": "目前沒有 incident 資料可供分析。", "chart_directive": None, "data": result}
+        answer = "No incident data available to analyze right now." if lang == "en" else "目前沒有 incident 資料可供分析。"
+        return {"answer_text": answer, "chart_directive": None, "data": result}
     worst = max(teams, key=lambda t: t["overdue_count"])
-    answer = f"目前逾期 incident 最多的是 {worst['team']}(逾期 {worst['overdue_count']} 件)。"
-    if result["most_responsive_team"]:
-        answer += f" 回應最快的是 {result['most_responsive_team']}。"
+    if lang == "en":
+        answer = f"{worst['team']} currently has the most overdue incidents ({worst['overdue_count']})."
+        if result["most_responsive_team"]:
+            answer += f" {result['most_responsive_team']} responds the fastest."
+    else:
+        answer = f"目前逾期 incident 最多的是 {worst['team']}(逾期 {worst['overdue_count']} 件)。"
+        if result["most_responsive_team"]:
+            answer += f" 回應最快的是 {result['most_responsive_team']}。"
     return {"answer_text": answer, "chart_directive": None, "data": result}
 
 
-async def run_lineage_coverage():
+async def run_lineage_coverage(lang: str = "zh"):
     result = await governance_lineage_coverage()
-    answer = f"目前 Lineage 覆蓋率為 {result['coverage_pct']}%({result['covered']}/{result['total_subjects']})。"
     islands = result["islands"]
-    if islands:
-        names = "、".join(i["name"] for i in islands[:5])
-        answer += f" 完全沒有 lineage 記錄的孤島有:{names}。"
+    if lang == "en":
+        answer = f"Lineage coverage is currently {result['coverage_pct']}% ({result['covered']}/{result['total_subjects']})."
+        if islands:
+            names = ", ".join(i["name"] for i in islands[:5])
+            answer += f" Datasets with no lineage record at all: {names}."
+    else:
+        answer = f"目前 Lineage 覆蓋率為 {result['coverage_pct']}%({result['covered']}/{result['total_subjects']})。"
+        if islands:
+            names = "、".join(i["name"] for i in islands[:5])
+            answer += f" 完全沒有 lineage 記錄的孤島有:{names}。"
     return {
         "answer_text": answer,
         "chart_directive": {"type": "highlight_subjects", "subject_ids": [i["id"] for i in islands]} if islands else None,
@@ -338,14 +423,27 @@ async def run_lineage_coverage():
     }
 
 
-async def run_subject_growth():
+async def run_subject_growth(lang: str = "zh"):
     result = await governance_subject_growth()
     flagged = result["flagged_domains"]
-    if not flagged:
-        answer = f"近 {result['window_days']} 天全公司新增了 {result['new_subjects_total']} 個 data subject,沒有 Domain 出現異常暴增。"
-        return {"answer_text": answer, "chart_directive": None, "data": result}
-    names = "、".join(f"{d['domain']}(+{d['new_count']})" for d in flagged)
-    answer = f"近 {result['window_days']} 天有異常成長的 Domain:{names}——建議確認是否為分類問題。"
+    if lang == "en":
+        if not flagged:
+            answer = (
+                f"{result['new_subjects_total']} data subjects were added company-wide in the last "
+                f"{result['window_days']} days, no Domain shows an anomalous surge."
+            )
+            return {"answer_text": answer, "chart_directive": None, "data": result}
+        names = ", ".join(f"{d['domain']} (+{d['new_count']})" for d in flagged)
+        answer = (
+            f"Domains with anomalous growth in the last {result['window_days']} days: {names} -- "
+            f"worth checking whether this is a mis-classification."
+        )
+    else:
+        if not flagged:
+            answer = f"近 {result['window_days']} 天全公司新增了 {result['new_subjects_total']} 個 data subject,沒有 Domain 出現異常暴增。"
+            return {"answer_text": answer, "chart_directive": None, "data": result}
+        names = "、".join(f"{d['domain']}(+{d['new_count']})" for d in flagged)
+        answer = f"近 {result['window_days']} 天有異常成長的 Domain:{names}——建議確認是否為分類問題。"
     return {
         "answer_text": answer,
         "chart_directive": {"type": "highlight_domains", "domains": [d["domain"] for d in flagged]},
@@ -357,12 +455,12 @@ async def run_subject_growth():
 # /agent/query keeps using _dispatch_llm_intent above, unchanged.
 
 
-async def _tool_risk_priority(n: int = 5):
+async def _tool_risk_priority(n: int = 5, lang: str = "zh"):
     # TOOL_DEFS uses "n" for consistency with every other tool's param
     # naming, but run_risk_priority's own kwarg is "limit" (see
     # _dispatch_llm_intent's equivalent translation above) -- this adapter
     # exists purely to bridge that naming mismatch.
-    return await run_risk_priority(limit=n)
+    return await run_risk_priority(limit=n, lang=lang)
 
 
 TOOL_HANDLERS = {
@@ -388,17 +486,17 @@ TOOL_HANDLERS = {
 _plan_cache: dict = {}
 
 
-async def _run_tool(name: str, args: dict):
+async def _run_tool(name: str, args: dict, lang: str = "zh"):
     handler = TOOL_HANDLERS.get(name)
     if handler is None:
         return None
     try:
-        return await handler(**args)
+        return await handler(**args, lang=lang)
     except TypeError:
         return None
 
 
-async def _dispatch_llm_intent(intent: str, params: dict):
+async def _dispatch_llm_intent(intent: str, params: dict, lang: str = "zh"):
     """Maps an LLM-classified intent to its whitelisted query function. The
     model only ever supplies an intent name (constrained to a fixed enum,
     see ollama_client.RESPONSE_SCHEMA) and typed params -- it never writes
@@ -409,6 +507,7 @@ async def _dispatch_llm_intent(intent: str, params: dict):
             n=params.get("n") or 3,
             group_by=params.get("group_by") or "domain",
             descending=params.get("descending", True),
+            lang=lang,
         )
     if intent == "top_n_by_delta":
         return await run_top_n_by_delta(
@@ -416,41 +515,42 @@ async def _dispatch_llm_intent(intent: str, params: dict):
             period=params.get("period") or "week",
             group_by=params.get("group_by") or "domain",
             descending=params.get("descending", True),
+            lang=lang,
         )
     if intent == "stagnant_domains":
-        return await run_stagnant_domains(months=params.get("months") or 2)
+        return await run_stagnant_domains(months=params.get("months") or 2, lang=lang)
     if intent == "domain_ranking":
-        return await run_domain_ranking()
+        return await run_domain_ranking(lang=lang)
     if intent == "subject_detail" and params.get("name_hint"):
-        return await run_subject_detail(params["name_hint"])
+        return await run_subject_detail(params["name_hint"], lang=lang)
     if intent == "trend_over_time":
-        return await run_trend_over_time(domain=params.get("domain"))
+        return await run_trend_over_time(domain=params.get("domain"), lang=lang)
     if intent == "risk_priority":
-        return await run_risk_priority(limit=params.get("n") or 5)
+        return await run_risk_priority(limit=params.get("n") or 5, lang=lang)
     if intent == "ownership_coverage":
-        return await run_ownership_coverage()
+        return await run_ownership_coverage(lang=lang)
     if intent == "stewardship":
-        return await run_stewardship()
+        return await run_stewardship(lang=lang)
     if intent == "lineage_coverage":
-        return await run_lineage_coverage()
+        return await run_lineage_coverage(lang=lang)
     if intent == "subject_growth":
-        return await run_subject_growth()
+        return await run_subject_growth(lang=lang)
     return None
 
 
-async def classify_and_run(question: str):
+async def classify_and_run(question: str, lang: str = "zh"):
     q = question.strip()
 
     llm_result = await classify_intent(q)
     if llm_result and llm_result.get("intent") not in (None, "unknown"):
-        dispatched = await _dispatch_llm_intent(llm_result["intent"], llm_result.get("params") or {})
+        dispatched = await _dispatch_llm_intent(llm_result["intent"], llm_result.get("params") or {}, lang=lang)
         if dispatched is not None:
             return dispatched
 
-    return await _classify_and_run_keywords(q)
+    return await _classify_and_run_keywords(q, lang=lang)
 
 
-async def _classify_and_run_keywords(q: str):
+async def _classify_and_run_keywords(q: str, lang: str = "zh"):
     """Keyword-rule fallback, used when Ollama is unreachable or returns
     "unknown". Only covers the original four intents (top_n_by_maturity,
     domain_ranking, subject_detail, trend_over_time) -- everything added
@@ -470,42 +570,59 @@ async def _classify_and_run_keywords(q: str):
     is_subject_scope = any(k in q for k in ["subject", "資料集", "dataset", "data subject"])
 
     if is_trend:
-        return await run_trend_over_time(domain=domain)
+        return await run_trend_over_time(domain=domain, lang=lang)
 
     if is_top_n and is_subject_scope and not is_department_scope:
         n = _extract_n(q)
-        return await run_top_n_by_maturity(n=n, group_by="subject", descending=not is_worst)
+        return await run_top_n_by_maturity(n=n, group_by="subject", descending=not is_worst, lang=lang)
 
     if is_top_n:
         # default scope is domain-level — matches the example question from
         # the requirements discussion ("maturity 最高的三個部門")
         n = _extract_n(q)
-        return await run_top_n_by_maturity(n=n, group_by="domain", descending=not is_worst)
+        return await run_top_n_by_maturity(n=n, group_by="domain", descending=not is_worst, lang=lang)
 
     if domain:
-        return await run_domain_ranking()
+        return await run_domain_ranking(lang=lang)
 
     words = re.findall(r"[A-Za-z_]{3,}", q)
     if words:
-        return await run_subject_detail(words[-1])
+        return await run_subject_detail(words[-1], lang=lang)
 
-    return {
-        "answer_text": (
+    if lang == "en":
+        answer = (
+            "This is the keyword-rule fallback reply (Ollama may be unreachable, or the question is out of "
+            'scope) -- try asking: "Top 3 Domains by maturity?", "Which Domain ranks last?", '
+            'or "The whole company\'s maturity trend over time?"'
+        )
+    else:
+        answer = (
             "目前是關鍵字規則版的備援回覆(Ollama 可能連不上,或問題超出可回答範圍),"
             "可以試著問:「maturity 最高的三個 Domain?」、「哪個 Domain 排名最後?」、"
             "或「全公司過去的 maturity 趨勢?」"
-        ),
-        "chart_directive": None,
-        "data": None,
-    }
+        )
+    return {"answer_text": answer, "chart_directive": None, "data": None}
 
 
 def sse_event(event_type: str, **data) -> str:
     return f"data: {json.dumps({'type': event_type, **data}, ensure_ascii=False)}\n\n"
 
 
-def _build_reply_prompt(question: str, result: dict) -> str:
+def _build_reply_prompt(question: str, result: dict, lang: str = "zh") -> str:
     grounding = json.dumps(result.get("data"), ensure_ascii=False, default=str)
+    if lang == "en":
+        return f"""You are the IDG Data Quality Dashboard's assistant. The user's question is: "{question}"
+
+The system has already queried the following real data (JSON, the only trustworthy source):
+{grounding}
+
+The system's originally-generated short answer was: "{result.get('answer_text', '')}"
+
+Reply in natural, friendly English, reorganizing this answer into one or two complete sentences for the user. Rules:
+1. You may only use the JSON data provided above -- never fabricate any number, name, or content not mentioned there.
+2. Do not repeat the phrase "originally-generated short answer" itself -- just give your reorganized reply directly.
+3. No Markdown or bullet points, plain text only.
+"""
     return f"""你是 IDG Data Quality Dashboard 的助理。使用者的問題是:「{question}」
 
 系統已經查詢好以下真實資料(JSON,是唯一可信的資料來源):
@@ -520,7 +637,7 @@ def _build_reply_prompt(question: str, result: dict) -> str:
 """
 
 
-def _build_multi_reply_prompt(question: str, tool_results: list) -> str:
+def _build_multi_reply_prompt(question: str, tool_results: list, lang: str = "zh") -> str:
     """Like _build_reply_prompt, generalized for a turn that made 1+ tool
     calls -- e.g. "who improved most, and who's their data owner" needs
     top_n_by_delta then subject_detail, so there's no single canonical
@@ -530,6 +647,20 @@ def _build_multi_reply_prompt(question: str, tool_results: list) -> str:
         ensure_ascii=False, default=str,
     )
     canned = "\n".join(r["result"].get("answer_text", "") for r in tool_results)
+    if lang == "en":
+        return f"""You are the IDG Data Quality Dashboard's assistant. The user's question is: "{question}"
+
+The system has already queried the following real data (JSON, the only trustworthy source):
+{grounding}
+
+The system's originally-generated short answers for these queries:
+{canned}
+
+Reply in natural, friendly English, integrating these answers into one coherent reply for the user. Rules:
+1. You may only use the JSON data provided above -- never fabricate any number, name, or content not mentioned there.
+2. If there are multiple query results, weave them into one coherent passage -- don't just list them one by one.
+3. No Markdown or bullet points, plain text only.
+"""
     return f"""你是 IDG Data Quality Dashboard 的助理。使用者的問題是:「{question}」
 
 系統已經查詢好以下真實資料(JSON,是唯一可信的資料來源):
@@ -545,11 +676,18 @@ def _build_multi_reply_prompt(question: str, tool_results: list) -> str:
 """
 
 
-def _build_fallback_prompt(question: str) -> str:
+def _build_fallback_prompt(question: str, lang: str = "zh") -> str:
     """Used when the whitelisted lookup found no data (out-of-scope
     question, greeting, etc.) -- there's nothing to ground a data-grounded
     reply on, but the model can still hold the conversation instead of the
     user seeing a static canned string with no LLM involved at all."""
+    if lang == "en":
+        return f"""You are the IDG Data Quality Dashboard's assistant, and only answer questions related to this system's data governance, maturity level, and domain/data subject topics.
+
+The user asked: "{question}"
+
+The system determined this question doesn't fall into any currently-supported query type (not a ranking, delta, stagnation-detection, specific data subject, or historical trend query, nor risk priority, ownership coverage, stewardship responsiveness, lineage coverage, or data subject growth). Reply briefly in natural, friendly English explaining the scope you can help with, and give 1-2 example questions (e.g. "Top 3 Domains by maturity?", "Which Domain improved the most this week?", "Which datasets have the highest risk?", "Which team has the most overdue incidents?"). One or two sentences is enough, no Markdown or bullet points; if the user's question was a greeting, respond naturally to the greeting first before giving examples.
+"""
     return f"""你是 IDG Data Quality Dashboard 的助理,只回答跟本系統的資料治理、maturity level、domain/data subject 相關的問題。
 
 使用者問了:「{question}」
@@ -619,7 +757,24 @@ def _reply_is_grounded(reply: str, data) -> bool:
 MAX_TOOL_ROUNDS = 4
 
 
-async def stream_agent_reply(question: str) -> AsyncIterator[str]:
+def _step_text(key: str, lang: str, **kwargs) -> str:
+    """Small lookup for stream_agent_reply's SSE `step` event text -- kept
+    as a single dict (rather than repeating if/else at each yield site)
+    since these are short, purely cosmetic status strings with no grounding
+    concerns, unlike answer_text (which stays inline if/else per function
+    to keep each function's own logic self-contained)."""
+    texts = {
+        "querying": {"zh": "正在查詢資料...", "en": "Querying data..."},
+        "querying_tool": {"zh": "正在查詢資料({name})...", "en": "Querying data ({name})..."},
+        "cap_hit": {"zh": "已達查詢上限,改用目前查到的資訊回答。", "en": "Reached the query limit, answering with what's been found so far."},
+        "phrasing": {"zh": "正在整理回覆...", "en": "Composing the reply..."},
+        "llm_unreachable": {"zh": "語言模型無法連線({e}),改用系統原始回覆。", "en": "Could not reach the language model ({e}), falling back to the system's original reply."},
+        "ungrounded": {"zh": "偵測到回覆內容可能與資料不符,改用系統原始回覆。", "en": "Detected the reply may not match the data, falling back to the system's original reply."},
+    }
+    return texts[key][lang].format(**kwargs)
+
+
+async def stream_agent_reply(question: str, lang: str = "zh") -> AsyncIterator[str]:
     """Async generator of SSE strings for the /agent/chat endpoint:
     step -> token* -> final.
 
@@ -632,7 +787,10 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
     exact-match cache (_plan_cache) remembers, per literal question string,
     which tools were called last time -- a cache hit skips only the
     tool-selection reasoning; each tool is still re-executed live so the
-    data itself is never stale.
+    data itself is never stale. `lang` is deliberately orthogonal to the
+    plan cache (never part of its key) -- it only affects how results get
+    phrased, not which tools get called, so the same cached plan is replayed
+    regardless of which language the current request asked for.
 
     Every tool result is a call into the same whitelisted run_* functions
     intents.py has always used (no arbitrary query is ever LLM-written),
@@ -651,7 +809,7 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
         key = (name, tuple(sorted((args or {}).items())))
         if key in seen_calls:
             return seen_calls[key]
-        result = await _run_tool(name, args or {})
+        result = await _run_tool(name, args or {}, lang=lang)
         seen_calls[key] = result
         if result is not None:
             tool_results.append({"tool": name, "args": args or {}, "result": result})
@@ -660,11 +818,11 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
     is_legacy_fallback = False
 
     if cached_plan:
-        yield sse_event("step", text="正在查詢資料...")
+        yield sse_event("step", text=_step_text("querying", lang))
         for step in cached_plan:
             await execute_call(step["tool"], step.get("args") or {})
     else:
-        yield sse_event("step", text="正在查詢資料...")
+        yield sse_event("step", text=_step_text("querying", lang))
         messages = [
             {"role": "system", "content": TOOL_CALLING_SYSTEM_PROMPT},
             {"role": "user", "content": q},
@@ -692,7 +850,7 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
                         args = {}
                 else:
                     args = raw_args or {}
-                yield sse_event("step", text=f"正在查詢資料({name})...")
+                yield sse_event("step", text=_step_text("querying_tool", lang, name=name))
                 result = await execute_call(name, args)
                 messages.append({
                     "role": "tool",
@@ -703,7 +861,7 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
             # Cap hit without the model stopping on its own -- proceed to
             # the phrasing turn below with whatever's been gathered so far,
             # rather than leaving the loop hanging.
-            yield sse_event("step", text="已達查詢上限,改用目前查到的資訊回答。")
+            yield sse_event("step", text=_step_text("cap_hit", lang))
 
         if ollama_unreachable:
             # Tool-selection model itself is unreachable and nothing was
@@ -711,7 +869,7 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
             # (classify_intent + keyword rules), same resilience contract
             # /agent/query has always had.
             is_legacy_fallback = True
-            legacy_result = await classify_and_run(q)
+            legacy_result = await classify_and_run(q, lang=lang)
             tool_results.append({"tool": "_legacy", "args": {}, "result": legacy_result})
 
     chart_directive = None
@@ -724,23 +882,23 @@ async def stream_agent_reply(question: str) -> AsyncIterator[str]:
     fallback_reply = "\n".join(r["result"].get("answer_text", "") for r in tool_results).strip()
 
     if tool_results:
-        prompt = _build_multi_reply_prompt(q, tool_results)
+        prompt = _build_multi_reply_prompt(q, tool_results, lang=lang)
     else:
-        prompt = _build_fallback_prompt(q)
+        prompt = _build_fallback_prompt(q, lang=lang)
 
-    yield sse_event("step", text="正在整理回覆...")
+    yield sse_event("step", text=_step_text("phrasing", lang))
     reply = ""
     try:
         async for piece in stream_chat_completion([{"role": "user", "content": prompt}]):
             reply += piece
             yield sse_event("token", text=piece)
     except Exception as e:
-        yield sse_event("step", text=f"語言模型無法連線({e}),改用系統原始回覆。")
+        yield sse_event("step", text=_step_text("llm_unreachable", lang, e=e))
         reply = ""
 
     reply = reply.strip()
     if reply and not _reply_is_grounded(reply, data):
-        yield sse_event("step", text="偵測到回覆內容可能與資料不符,改用系統原始回覆。")
+        yield sse_event("step", text=_step_text("ungrounded", lang))
         reply = ""
 
     tools_called = [r["tool"] for r in tool_results if r["tool"] != "_legacy"]

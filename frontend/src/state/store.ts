@@ -9,9 +9,19 @@ interface ChatMessage {
   pending?: boolean
 }
 
+export type Locale = 'en' | 'zh'
+
 interface DashboardState {
   mode: Mode
   toggleMode: () => void
+
+  // UI language. Unlike `mode` (seeded from the OS's prefers-color-scheme),
+  // there's no OS-language signal worth honoring here -- defaults to 'en'
+  // per an explicit product decision, persisted to localStorage so a manual
+  // switch survives reloads.
+  locale: Locale
+  setLocale: (l: Locale) => void
+  toggleLocale: () => void
 
   // maturity DIMENSION config (KPI heatmap / breakdown drawers) — fetched
   // once at startup from /api/config/dimensions. Independent of Level below.
@@ -61,9 +71,34 @@ interface DashboardState {
 const prefersDark =
   typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
 
+const LOCALE_STORAGE_KEY = 'idg-dashboard-locale'
+
+function loadLocale(): Locale {
+  if (typeof window === 'undefined') return 'en'
+  const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY)
+  return stored === 'zh' ? 'zh' : 'en'
+}
+
+function saveLocale(l: Locale) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(LOCALE_STORAGE_KEY, l)
+}
+
 export const useStore = create<DashboardState>((set) => ({
   mode: prefersDark ? 'dark' : 'light',
   toggleMode: () => set((s) => ({ mode: s.mode === 'light' ? 'dark' : 'light' })),
+
+  locale: loadLocale(),
+  setLocale: (l) => {
+    saveLocale(l)
+    set({ locale: l })
+  },
+  toggleLocale: () =>
+    set((s) => {
+      const next = s.locale === 'en' ? 'zh' : 'en'
+      saveLocale(next)
+      return { locale: next }
+    }),
 
   dimensions: [],
   maxScore: 5,

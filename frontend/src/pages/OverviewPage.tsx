@@ -11,6 +11,7 @@ import SubjectTable from '../components/SubjectTable'
 import { useStore } from '../state/store'
 import { api } from '../api/client'
 import { chrome, categorical } from '../theme/palette'
+import { useT } from '../i18n/useT'
 
 function CountTile({
   icon,
@@ -28,6 +29,7 @@ function CountTile({
   windowDays?: number
 }) {
   const mode = useStore((s) => s.mode)
+  const t = useT()
   const c = chrome[mode]
   const accent = categorical[mode][0]
 
@@ -63,7 +65,7 @@ function CountTile({
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {label}
-            {trend && newCount !== undefined ? ` · 近 ${windowDays} 天 +${newCount}` : ''}
+            {trend && newCount !== undefined ? t('overview.newInWindow', { days: windowDays ?? 0, count: newCount }) : ''}
           </Typography>
         </Box>
         {trend && trend.length > 1 && (
@@ -77,6 +79,7 @@ function CountTile({
 }
 
 export default function OverviewPage() {
+  const t = useT()
   const selectedDomain = useStore((s) => s.selectedDomain)
   const levelRange = useStore((s) => s.levelRange)
   const highlightedDomains = useStore((s) => s.highlightedDomains)
@@ -100,10 +103,10 @@ export default function OverviewPage() {
   return (
     <Box sx={{ p: 3, maxWidth: 1280, mx: 'auto' }}>
       <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-        <CountTile icon={<AccountTreeIcon color="action" />} label="Domains" count={domainCount} />
+        <CountTile icon={<AccountTreeIcon color="action" />} label={t('overview.domains')} count={domainCount} />
         <CountTile
           icon={<Inventory2Icon color="action" />}
-          label="Data Subjects"
+          label={t('overview.dataSubjects')}
           count={subjectCount}
           trend={subjectTrend}
           newCount={newSubjects?.count}
@@ -114,7 +117,7 @@ export default function OverviewPage() {
       {hasActiveFilter && (
         <Stack direction="row" spacing={1} sx={{ mb: 2, alignItems: 'center' }}>
           <Typography variant="body2" color="text.secondary">
-            篩選中:
+            {t('overview.filtering')}
           </Typography>
           {selectedDomain && <Chip size="small" label={`Domain: ${selectedDomain}`} onDelete={() => useStore.getState().setSelectedDomain(null)} />}
           {levelRange && (
@@ -125,9 +128,13 @@ export default function OverviewPage() {
             />
           )}
           {highlightedDomains.length > 0 && (
-            <Chip size="small" label={`AI 標示: ${highlightedDomains.join(', ')}`} onDelete={() => useStore.getState().setHighlightedDomains([])} />
+            <Chip
+              size="small"
+              label={t('overview.aiHighlighted', { list: highlightedDomains.join(', ') })}
+              onDelete={() => useStore.getState().setHighlightedDomains([])}
+            />
           )}
-          <Chip size="small" variant="outlined" label="清除全部" onClick={clearFilters} />
+          <Chip size="small" variant="outlined" label={t('overview.clearAll')} onClick={clearFilters} />
         </Stack>
       )}
 

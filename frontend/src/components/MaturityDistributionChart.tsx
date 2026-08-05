@@ -7,12 +7,14 @@ import { chrome } from '../theme/palette'
 import { getLevelColor } from '../theme/badges'
 import { baseAxis, tooltipStyle, FONT_FAMILY } from '../theme/echartsTheme'
 import InfoTooltip from './InfoTooltip'
+import { useT } from '../i18n/useT'
 
 export default function MaturityDistributionChart() {
   const mode = useStore((s) => s.mode)
   const levelRange = useStore((s) => s.levelRange)
   const setLevelRange = useStore((s) => s.setLevelRange)
   const [levels, setLevels] = useState<{ level: number; count: number }[]>([])
+  const t = useT()
 
   useEffect(() => {
     api.maturityDistribution().then((res) => setLevels(res.levels))
@@ -27,7 +29,8 @@ export default function MaturityDistributionChart() {
       trigger: 'axis',
       axisPointer: { type: 'none' },
       ...tooltipStyle(mode),
-      formatter: (params: { name: string; value: number }[]) => `${params[0].name}: ${params[0].value} 個 subjects`,
+      formatter: (params: { name: string; value: number }[]) =>
+        `${params[0].name}: ${params[0].value}${t('overview.maturityDist.countSuffix')}`,
     },
     xAxis: {
       type: 'category',
@@ -70,9 +73,9 @@ export default function MaturityDistributionChart() {
       <CardContent>
         <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 0 }}>
-            Maturity Level 分佈
+            {t('overview.maturityDist.title')}
           </Typography>
-          <InfoTooltip text="每個 data subject 依目前的 Maturity Level(L1-L5)分到對應的長條——柱子越高代表卡在那個等級的資料集越多。點一根柱子可以篩選下面的清單只看那個等級。" />
+          <InfoTooltip text={t('overview.maturityDist.tooltip')} />
         </Stack>
         <Box sx={{ height: 220 }}>
           <ReactECharts

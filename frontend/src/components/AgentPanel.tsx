@@ -6,11 +6,12 @@ import SendIcon from '@mui/icons-material/Send'
 import { streamAgentChat, type AgentResponse } from '../api/client'
 import { useStore } from '../state/store'
 import { categorical } from '../theme/palette'
-
-const SUGGESTIONS = ['目前 data maturity 最高的三個 Domain?', '哪個 Domain 排名最後?', '全公司過去的 maturity 趨勢?']
+import { useT } from '../i18n/useT'
 
 export default function AgentPanel() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
+  const locale = useStore((s) => s.locale)
   const agentOpen = useStore((s) => s.agentOpen)
   const setAgentOpen = useStore((s) => s.setAgentOpen)
   const messages = useStore((s) => s.agentMessages)
@@ -25,6 +26,8 @@ export default function AgentPanel() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  const SUGGESTIONS = [t('agent.suggestion1'), t('agent.suggestion2'), t('agent.suggestion3')]
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -62,22 +65,26 @@ export default function AgentPanel() {
     setSending(true)
 
     let accumulated = ''
-    await streamAgentChat(question, {
-      onStep: (text) => {
-        updateLastAgentMessage((m) => ({ ...m, steps: [...(m.steps ?? []), text] }))
+    await streamAgentChat(
+      question,
+      {
+        onStep: (text) => {
+          updateLastAgentMessage((m) => ({ ...m, steps: [...(m.steps ?? []), text] }))
+        },
+        onToken: (text) => {
+          accumulated += text
+          updateLastAgentMessage((m) => ({ ...m, text: accumulated }))
+        },
+        onFinal: (evt) => {
+          updateLastAgentMessage((m) => ({ ...m, text: evt.reply || accumulated, pending: false }))
+          applyDirective(evt.chart_directive)
+        },
+        onError: () => {
+          updateLastAgentMessage((m) => ({ ...m, text: t('agent.queryFailed'), pending: false }))
+        },
       },
-      onToken: (text) => {
-        accumulated += text
-        updateLastAgentMessage((m) => ({ ...m, text: accumulated }))
-      },
-      onFinal: (evt) => {
-        updateLastAgentMessage((m) => ({ ...m, text: evt.reply || accumulated, pending: false }))
-        applyDirective(evt.chart_directive)
-      },
-      onError: () => {
-        updateLastAgentMessage((m) => ({ ...m, text: '查詢失敗,請稍後再試。', pending: false }))
-      },
-    })
+      locale,
+    )
     setSending(false)
   }
 
@@ -104,7 +111,7 @@ export default function AgentPanel() {
           <Stack direction="row" spacing={1} sx={{ px: 2, py: 1.5, bgcolor: accent, color: '#fff', alignItems: 'center' }}>
             <SmartToyIcon fontSize="small" />
             <Typography variant="subtitle2" sx={{ flex: 1 }}>
-              Data Quality Agent
+              {t('agent.title')}
             </Typography>
             <IconButton size="small" onClick={() => setAgentOpen(false)} sx={{ color: '#fff' }}>
               <CloseIcon fontSize="small" />
@@ -115,7 +122,7 @@ export default function AgentPanel() {
             {messages.length === 0 && (
               <Stack spacing={1}>
                 <Typography variant="caption" color="text.secondary">
-                  試著問我:
+                  {t('agent.tryAsking')}
                 </Typography>
                 {SUGGESTIONS.map((s) => (
                   <Paper
@@ -160,7 +167,7 @@ export default function AgentPanel() {
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                         <CircularProgress size={12} />
                         <Typography variant="caption" color="text.secondary">
-                          思考中…
+                          {t('agent.thinking')}
                         </Typography>
                       </Stack>
                     ) : (
@@ -176,7 +183,7 @@ export default function AgentPanel() {
             <TextField
               size="small"
               fullWidth
-              placeholder="問問資料狀況…"
+              placeholder={t('agent.inputPlaceholder')}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {

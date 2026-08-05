@@ -7,8 +7,10 @@ import { useStore } from '../../state/store'
 import { chrome, domainColor, DOMAIN_ORDER } from '../../theme/palette'
 import { baseAxis, tooltipStyle, FONT_FAMILY } from '../../theme/echartsTheme'
 import InfoTooltip from '../InfoTooltip'
+import { useT } from '../../i18n/useT'
 
 export default function RiskPriorityChart() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
   const setSelectedSubjectId = useStore((s) => s.setSelectedSubjectId)
   const [data, setData] = useState<RiskPriorityResponse | null>(null)
@@ -57,11 +59,17 @@ export default function RiskPriorityChart() {
         trigger: 'item',
         ...tooltipStyle(mode),
         formatter: (p: { seriesName: string; data: { name: string; value: number[]; risk_score: number } }) =>
-          `${p.data.name}(${p.seriesName})<br/>Level L${p.data.value[1]} · 累積查詢 ${p.data.value[0]}<br/>風險分數 ${p.data.risk_score}`,
+          t('gov.risk.chartTooltip', {
+            name: p.data.name,
+            domain: p.seriesName,
+            level: p.data.value[1],
+            usage: p.data.value[0],
+            score: p.data.risk_score,
+          }),
       },
       xAxis: {
         type: 'value',
-        name: '累積查詢次數(usage,最多近 30 天)',
+        name: t('gov.risk.xAxisName'),
         nameLocation: 'middle',
         nameGap: 32,
         ...baseAxis(mode),
@@ -85,7 +93,7 @@ export default function RiskPriorityChart() {
               right: 28,
               bottom: 64,
               style: {
-                text: '高使用量 × 低 Level\n優先處理區',
+                text: t('gov.risk.quadrantLabel'),
                 fill: c.textMuted,
                 fontSize: 11,
                 fontFamily: FONT_FAMILY,
@@ -98,13 +106,13 @@ export default function RiskPriorityChart() {
           ]
         : [],
     }
-  }, [data, mode, c, maxRisk])
+  }, [data, mode, c, maxRisk, t])
 
   const columns: GridColDef<RiskPriorityRow>[] = useMemo(
     () => [
       {
         field: 'name',
-        headerName: '資料集',
+        headerName: t('gov.risk.colName'),
         flex: 1.3,
         renderCell: (params) => (
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', height: '100%' }}>
@@ -116,7 +124,7 @@ export default function RiskPriorityChart() {
       { field: 'domain', headerName: 'Domain', flex: 0.8 },
       {
         field: 'maturity_level',
-        headerName: '目前 Level',
+        headerName: t('gov.risk.colLevel'),
         flex: 0.8,
         type: 'number',
         renderCell: (params) => (
@@ -127,7 +135,7 @@ export default function RiskPriorityChart() {
       },
       {
         field: 'usage_30d',
-        headerName: '累積查詢量',
+        headerName: t('gov.risk.colUsage'),
         flex: 0.9,
         type: 'number',
         renderCell: (params) => (
@@ -138,7 +146,7 @@ export default function RiskPriorityChart() {
       },
       {
         field: 'risk_score',
-        headerName: '風險分數',
+        headerName: t('gov.risk.colScore'),
         flex: 0.9,
         type: 'number',
         renderCell: (params) => (
@@ -150,7 +158,7 @@ export default function RiskPriorityChart() {
         ),
       },
     ],
-    [mode],
+    [mode, t],
   )
 
   return (
@@ -158,16 +166,12 @@ export default function RiskPriorityChart() {
       <CardContent>
         <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
           <Typography variant="subtitle1" gutterBottom sx={{ mb: 0 }}>
-            風險優先排序:誰該先救?
+            {t('gov.risk.title')}
           </Typography>
-          <InfoTooltip
-            text={`使用量高但 Level 低的資料集(圖上偏右下、泡泡越大)代表一旦出問題影響範圍最廣,應該優先處理,而不是單純看誰的 Level 最低。
-
-使用量是每天從 DataHub 同步一筆、自己累積起來的,不是一次拿到 30 天——新收錄的資料集要等累積滿 ${data?.usage_history_min_days ?? 7} 天才會出現在排名裡。`}
-          />
+          <InfoTooltip text={t('gov.risk.tooltip', { days: data?.usage_history_min_days ?? 7 })} />
         </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-          風險分數 = 累積使用量 × 距離 L5 的差距
+          {t('gov.risk.subtitle')}
         </Typography>
         <Box sx={{ height: 320 }}>
           <ReactECharts option={option} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} />
@@ -187,14 +191,14 @@ export default function RiskPriorityChart() {
         {data && data.zombies.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-              治理做得不錯但幾乎沒人用(可評估下架/整併)
+              {t('gov.risk.zombiesTitle')}
             </Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
               {data.zombies.map((z) => (
                 <Chip
                   key={z.id}
                   size="small"
-                  label={`${z.name} · L${z.maturity_level} · ${z.usage_30d} 次`}
+                  label={t('gov.risk.zombieChip', { name: z.name, level: z.maturity_level, usage: z.usage_30d ?? 0 })}
                   onClick={() => setSelectedSubjectId(z.id)}
                   sx={{ cursor: 'pointer' }}
                 />
@@ -205,7 +209,7 @@ export default function RiskPriorityChart() {
         {data && data.accumulating.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-              資料累積中(使用量歷史還不足 {data.usage_history_min_days} 天,尚未列入排序)
+              {t('gov.risk.accumulatingTitle', { days: data.usage_history_min_days })}
             </Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
               {data.accumulating.map((r) => (
@@ -213,7 +217,11 @@ export default function RiskPriorityChart() {
                   key={r.id}
                   size="small"
                   variant="outlined"
-                  label={`${r.name} · ${r.usage_days_accumulated}/${data.usage_history_min_days} 天`}
+                  label={t('gov.risk.accumulatingChip', {
+                    name: r.name,
+                    accumulated: r.usage_days_accumulated,
+                    min: data.usage_history_min_days,
+                  })}
                   onClick={() => setSelectedSubjectId(r.id)}
                   sx={{ cursor: 'pointer' }}
                 />

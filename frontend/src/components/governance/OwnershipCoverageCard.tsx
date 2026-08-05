@@ -6,6 +6,7 @@ import { useStore } from '../../state/store'
 import { chrome, domainColor } from '../../theme/palette'
 import { baseAxis, tooltipStyle, FONT_FAMILY } from '../../theme/echartsTheme'
 import InfoTooltip from '../InfoTooltip'
+import { useT } from '../../i18n/useT'
 
 const ROLE_LABELS: Record<string, string> = {
   DATA_OWNER: 'Data Owner',
@@ -15,6 +16,7 @@ const ROLE_LABELS: Record<string, string> = {
 const ROLE_ORDER = ['DATA_OWNER', 'DATA_STEWARD', 'IT_OWNER']
 
 export default function OwnershipCoverageCard() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
   const setSelectedSubjectId = useStore((s) => s.setSelectedSubjectId)
   const [data, setData] = useState<OwnershipCoverageResponse | null>(null)
@@ -36,7 +38,9 @@ export default function OwnershipCoverageCard() {
         ...tooltipStyle(mode),
         formatter: (params: { name: string }[]) => {
           const d = rows.find((x) => x.domain === params[0].name)
-          return d ? `${d.domain}: ${d.fully_covered}/${d.total} 完整指派(${d.coverage_pct}%)` : ''
+          return d
+            ? t('gov.ownership.chartTooltip', { domain: d.domain, covered: d.fully_covered, total: d.total, pct: d.coverage_pct })
+            : ''
         },
       },
       xAxis: { type: 'value', min: 0, max: 100, ...baseAxis(mode) },
@@ -67,7 +71,7 @@ export default function OwnershipCoverageCard() {
         },
       ],
     }
-  }, [data, mode, c])
+  }, [data, mode, c, t])
 
   const gapEntries = useMemo(() => {
     if (!data) return []
@@ -91,12 +95,12 @@ export default function OwnershipCoverageCard() {
       <CardContent>
         <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
           <Typography variant="subtitle1" gutterBottom sx={{ mb: 0 }}>
-            Ownership 覆蓋率:誰在管這份資料?
+            {t('gov.ownership.title')}
           </Typography>
-          <InfoTooltip text="這是最根本的治理缺口——沒有指派 Owner 的資料集等於沒人負責推動品質,補指派永遠是最快能做的 action。" />
+          <InfoTooltip text={t('gov.ownership.tooltip')} />
         </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-          缺 Owner/Steward/IT Owner 任一角色 = 沒人負責
+          {t('gov.ownership.subtitle')}
         </Typography>
 
         <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
@@ -105,7 +109,7 @@ export default function OwnershipCoverageCard() {
               {data ? `${data.coverage_pct}%` : '—'}
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {data ? `${data.fully_covered} / ${data.total_subjects} 個 data subject 三個角色都已指派` : ''}
+              {data ? t('gov.ownership.coverageDetail', { covered: data.fully_covered, total: data.total_subjects }) : ''}
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'flex-start' }}>
@@ -114,7 +118,11 @@ export default function OwnershipCoverageCard() {
                 key={role}
                 size="small"
                 variant="outlined"
-                label={`${ROLE_LABELS[role]} ${data?.role_coverage[role]?.covered_pct ?? '—'}%(缺 ${data?.role_coverage[role]?.missing_count ?? 0})`}
+                label={t('gov.ownership.roleChip', {
+                  role: ROLE_LABELS[role],
+                  pct: data?.role_coverage[role]?.covered_pct ?? '—',
+                  missing: data?.role_coverage[role]?.missing_count ?? 0,
+                })}
               />
             ))}
           </Stack>
@@ -127,14 +135,14 @@ export default function OwnershipCoverageCard() {
         {gapEntries.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-              待補指派({gapEntries.length}{gapEntries.length >= 10 ? '+' : ''})
+              {t('gov.ownership.pendingTitle', { n: gapEntries.length, plus: gapEntries.length >= 10 ? '+' : '' })}
             </Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
               {gapEntries.map((g) => (
                 <Chip
                   key={g.id}
                   size="small"
-                  label={`${g.name} · 缺 ${g.missingRoles.map((r) => ROLE_LABELS[r]).join('/')}`}
+                  label={`${g.name} · ${t('gov.ownership.missingPrefix')}${g.missingRoles.map((r) => ROLE_LABELS[r]).join('/')}`}
                   onClick={() => setSelectedSubjectId(g.id)}
                   sx={{ cursor: 'pointer' }}
                 />

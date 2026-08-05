@@ -7,10 +7,12 @@ import { api, type OrgSnapshot } from '../api/client'
 import { useStore } from '../state/store'
 import { chrome, categorical } from '../theme/palette'
 import InfoTooltip from './InfoTooltip'
+import { useT } from '../i18n/useT'
 
 export default function HeadlineIndexCard() {
   const mode = useStore((s) => s.mode)
   const maxLevel = useStore((s) => s.maxLevel)
+  const t = useT()
   const [latest, setLatest] = useState<OrgSnapshot | null>(null)
   const [trend, setTrend] = useState<OrgSnapshot[]>([])
 
@@ -61,9 +63,9 @@ export default function HeadlineIndexCard() {
       <CardContent>
         <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
           <Typography variant="body2" color="text.secondary" gutterBottom sx={{ mb: 0 }}>
-            Data Quality Index
+            {t('overview.dqi.title')}
           </Typography>
-          <InfoTooltip text="全公司資料治理成熟度的單一總分,方便對外(例如管理層)一眼看懂現況,不用先解釋 L1-L5 的階梯規則。內部盤點細節請看下方各 Domain 的 Maturity Level。" />
+          <InfoTooltip text={t('overview.dqi.tooltip')} />
         </Stack>
         <Stack direction="row" spacing={2} sx={{ alignItems: 'baseline' }}>
           <Typography sx={{ fontSize: 48, fontWeight: 600, lineHeight: 1 }}>
@@ -83,10 +85,12 @@ export default function HeadlineIndexCard() {
           )}
         </Stack>
         <Typography variant="caption" color="text.secondary">
-          {latest ? `平均分數 ${latest.avg_maturity_level.toFixed(1)} / L${maxLevel} · ${latest.subject_count} data subjects` : ''}
+          {latest
+            ? `${t('overview.dqi.avgScore')} ${latest.avg_maturity_level.toFixed(1)} / L${maxLevel} · ${latest.subject_count} data subjects`
+            : ''}
         </Typography>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3 }}>
-          計算方式:平均 Maturity Level ÷ L{maxLevel} × 100
+          {t('overview.dqi.formula')} L{maxLevel} × 100
         </Typography>
         <Box sx={{ height: 48, mt: 1 }}>
           <ReactECharts option={sparklineOption} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} />

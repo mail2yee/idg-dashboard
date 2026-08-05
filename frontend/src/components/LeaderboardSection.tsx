@@ -11,6 +11,7 @@ import { useStore } from '../state/store'
 import { domainColor, DOMAIN_ORDER, categorical, status } from '../theme/palette'
 import { getLevelColor } from '../theme/badges'
 import InfoTooltip from './InfoTooltip'
+import { useT } from '../i18n/useT'
 
 function DomainBadgeCard({
   d,
@@ -23,6 +24,7 @@ function DomainBadgeCard({
   maxLevel: number
   onClick: () => void
 }) {
+  const t = useT()
   const rounded = Math.round(d.avg_maturity_level)
   const toGo = Math.max(0, maxLevel - d.avg_maturity_level)
   return (
@@ -56,7 +58,7 @@ function DomainBadgeCard({
           }}
         />
         <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-          {d.avg_maturity_level.toFixed(2)} / L{maxLevel} · 距離 L{maxLevel} 還差 {toGo.toFixed(2)}
+          {d.avg_maturity_level.toFixed(2)} / L{maxLevel} · {t('leaderboard.toGo', { max: maxLevel })} {toGo.toFixed(2)}
         </Typography>
       </CardContent>
     </Card>
@@ -64,7 +66,7 @@ function DomainBadgeCard({
 }
 
 function TeamBadgeCard({
-  t,
+  t: team,
   mode,
   maxLevel,
   onClick,
@@ -74,8 +76,9 @@ function TeamBadgeCard({
   maxLevel: number
   onClick: () => void
 }) {
-  const rounded = Math.round(t.avg_maturity_level)
-  const toGo = Math.max(0, maxLevel - t.avg_maturity_level)
+  const t = useT()
+  const rounded = Math.round(team.avg_maturity_level)
+  const toGo = Math.max(0, maxLevel - team.avg_maturity_level)
   return (
     <Card variant="outlined" onClick={onClick} sx={{ width: 200, flexShrink: 0, borderColor: 'divider', cursor: 'pointer' }}>
       <CardContent>
@@ -87,15 +90,15 @@ function TeamBadgeCard({
             </Typography>
             <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
               <BusinessIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
-              <Typography variant="subtitle2" noWrap title={t.team}>
-                {t.team}
+              <Typography variant="subtitle2" noWrap title={team.team}>
+                {team.team}
               </Typography>
             </Stack>
           </Box>
         </Stack>
         <LinearProgress
           variant="determinate"
-          value={(t.avg_maturity_level / maxLevel) * 100}
+          value={(team.avg_maturity_level / maxLevel) * 100}
           sx={{
             height: 6,
             borderRadius: 3,
@@ -105,7 +108,9 @@ function TeamBadgeCard({
           }}
         />
         <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-          {t.avg_maturity_level.toFixed(2)} / L{maxLevel} · 距離 L{maxLevel} 還差 {toGo.toFixed(2)} · {t.subject_count} 個 subjects
+          {team.avg_maturity_level.toFixed(2)} / L{maxLevel} · {t('leaderboard.toGo', { max: maxLevel })} {toGo.toFixed(2)} ·{' '}
+          {team.subject_count}
+          {t('leaderboard.subjectsCount')}
         </Typography>
       </CardContent>
     </Card>
@@ -252,6 +257,7 @@ function SpotlightRow({
 const SUBJECT_WALL_COLLAPSED_COUNT = 12
 
 export default function LeaderboardSection() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
   const maxLevel = useStore((s) => s.maxLevel)
   const setSelectedDomainDetail = useStore((s) => s.setSelectedDomainDetail)
@@ -323,32 +329,32 @@ export default function LeaderboardSection() {
       <CardContent>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
           <EmojiEventsIcon sx={{ fontSize: 20 }} />
-          <Typography variant="subtitle1">Leaderboard</Typography>
-          <InfoTooltip text="冠軍卡跟 Spotlight 只顯示「進步」,不會顯示退步排名,故意設計成只鼓勵、不點名——公開榜是依 Owner Team 彙總,個人名字只會出現在該資料集自己的詳情頁裡。" />
+          <Typography variant="subtitle1">{t('leaderboard.title')}</Typography>
+          <InfoTooltip text={t('leaderboard.tooltip')} />
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          目標是每個 Domain 跟 data subject 都逐步邁向 L{maxLevel},徽章代表目前的等級,不代表名次高低。
+          {t('leaderboard.goalLine', { max: maxLevel })}
         </Typography>
 
         <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
           <ChampionCard
-            title="本週冠軍 · WoW 進步最多的 Domain"
+            title={t('leaderboard.weeklyDomainChampion')}
             name={weeklyChampion?.domain}
             delta={weeklyChampion?.wow_delta}
-            emptyText="這週大家都持平,繼續加油!"
+            emptyText={t('leaderboard.emptyFlatWeek')}
             onClick={() => weeklyChampion && setSelectedDomainDetail(weeklyChampion.domain)}
           />
           <ChampionCard
-            title="本月冠軍 · MoM 進步最多的 Domain"
+            title={t('leaderboard.monthlyDomainChampion')}
             name={monthlyChampion?.domain}
             delta={monthlyChampion?.mom_delta}
-            emptyText="這個月還沒有明顯進步的 Domain,一起加油!"
+            emptyText={t('leaderboard.emptyFlatMonth')}
             onClick={() => monthlyChampion && setSelectedDomainDetail(monthlyChampion.domain)}
           />
         </Stack>
 
         <Typography variant="subtitle2" gutterBottom>
-          Domain 徽章
+          {t('leaderboard.domainBadges')}
         </Typography>
         <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap', mb: 1 }}>
           {orderedDomains.map((d) => (
@@ -358,35 +364,35 @@ export default function LeaderboardSection() {
 
         <Stack direction="row" spacing={2} sx={{ mb: 2, mt: 1 }}>
           <ChampionCard
-            title="本週最佳 Owner Team · WoW"
+            title={t('leaderboard.weeklyTeamChampion')}
             name={weeklyTeamChampion?.team}
             delta={weeklyTeamChampion?.wow_delta}
-            emptyText="這週各 owner team 都持平,繼續加油!"
+            emptyText={t('leaderboard.emptyFlatWeekTeam')}
             onClick={() => weeklyTeamChampion && setSelectedOwnerTeamDetail(weeklyTeamChampion.team)}
           />
           <ChampionCard
-            title="本月最佳 Owner Team · MoM"
+            title={t('leaderboard.monthlyTeamChampion')}
             name={monthlyTeamChampion?.team}
             delta={monthlyTeamChampion?.mom_delta}
-            emptyText="這個月還沒有 owner team 明顯進步,一起加油!"
+            emptyText={t('leaderboard.emptyFlatMonthTeam')}
             onClick={() => monthlyTeamChampion && setSelectedOwnerTeamDetail(monthlyTeamChampion.team)}
           />
         </Stack>
 
         <Typography variant="subtitle2" gutterBottom>
-          Owner Team 徽章(依 Data Owner 所屬單位)
+          {t('leaderboard.teamBadges')}
         </Typography>
         <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap', mb: 1 }}>
-          {orderedTeams.map((t) => (
-            <TeamBadgeCard key={t.team} t={t} mode={mode} maxLevel={maxLevel} onClick={() => setSelectedOwnerTeamDetail(t.team)} />
+          {orderedTeams.map((team) => (
+            <TeamBadgeCard key={team.team} t={team} mode={mode} maxLevel={maxLevel} onClick={() => setSelectedOwnerTeamDetail(team.team)} />
           ))}
         </Stack>
 
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
-          <Typography variant="subtitle2">Data Subject 徽章牆 ({orderedSubjects.length})</Typography>
+          <Typography variant="subtitle2">{t('leaderboard.subjectWall', { n: orderedSubjects.length })}</Typography>
           {orderedSubjects.length > SUBJECT_WALL_COLLAPSED_COUNT && (
             <Button size="small" onClick={() => setSubjectWallExpanded((v) => !v)}>
-              {subjectWallExpanded ? '收合' : '顯示全部'}
+              {subjectWallExpanded ? t('leaderboard.collapse') : t('leaderboard.showAll')}
             </Button>
           )}
         </Stack>
@@ -398,26 +404,26 @@ export default function LeaderboardSection() {
 
         <SpotlightRow
           icon={<RocketLaunchIcon sx={{ fontSize: 18, color: categorical[mode][0] }} />}
-          title="本週最進步 Domain Top 3"
-          emptyText="這週大家都持平,繼續加油!"
+          title={t('leaderboard.top3WeeklyDomain')}
+          emptyText={t('leaderboard.emptyFlatWeek')}
           items={topWeeklyDomains}
         />
         <SpotlightRow
           icon={<TrendingUpIcon sx={{ fontSize: 18, color: categorical[mode][0] }} />}
-          title="本月最進步 Domain Top 3"
-          emptyText="這個月還沒有明顯進步的 Domain,一起加油!"
+          title={t('leaderboard.top3MonthlyDomain')}
+          emptyText={t('leaderboard.emptyFlatMonth')}
           items={topMonthlyDomains}
         />
         <SpotlightRow
           icon={<StarIcon sx={{ fontSize: 18, color: categorical[mode][0] }} />}
-          title="本週最進步 Data Subjects Top 3"
-          emptyText="這週還沒有明顯進步的 subject,一起加油!"
+          title={t('leaderboard.top3WeeklySubject')}
+          emptyText={t('leaderboard.emptyFlatWeekSubject')}
           items={topWeeklySubjects}
         />
         <SpotlightRow
           icon={<MilitaryTechIcon sx={{ fontSize: 18, color: categorical[mode][0] }} />}
-          title="本月最進步 Data Subjects Top 3"
-          emptyText="這個月還沒有明顯進步的 subject,一起加油!"
+          title={t('leaderboard.top3MonthlySubject')}
+          emptyText={t('leaderboard.emptyFlatMonthSubject')}
           items={topMonthlySubjects}
         />
       </CardContent>

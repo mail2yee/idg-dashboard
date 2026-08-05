@@ -271,3 +271,30 @@ async def test_agent_chat_repeat_question_cache_hit_still_correct(client, ollama
     assert second.status_code == 200
     assert '"type": "final"' in second.text
     assert '"reply"' in second.text
+
+
+# --- lang="en" -- the EN/中 UI toggle threads a lang param through to both
+# endpoints (default "zh", so every test above is unaffected). Not
+# exhaustive across all 11 intents (see intents.py's inline if/else per
+# run_* function for the full translation) -- just enough to prove the
+# plumbing actually reaches the deterministic answer_text (query, no LLM
+# needed) and the LLM phrasing pass (chat, needs Ollama reachable). -------
+
+async def test_agent_query_lang_en(client):
+    resp = await client.post("/agent/query", json={"question": "maturity 最高的三個 Domain", "lang": "en"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["chart_directive"]["type"] == "highlight_domains"
+    assert len(body["chart_directive"]["domains"]) == 3
+    assert "score" in body["answer_text"].lower()
+    assert "分數" not in body["answer_text"]
+
+
+async def test_agent_chat_lang_en(client, ollama_reachable):
+    if not ollama_reachable:
+        _skip_if_no_llm()
+    resp = await client.post("/agent/chat", json={"question": "maturity 最高的三個 Domain", "lang": "en"})
+    assert resp.status_code == 200
+    text = resp.text
+    assert '"type": "final"' in text
+    assert "分數" not in text

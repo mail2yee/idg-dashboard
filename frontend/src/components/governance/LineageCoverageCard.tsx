@@ -4,8 +4,10 @@ import { api, type LineageCoverageResponse } from '../../api/client'
 import { useStore } from '../../state/store'
 import { domainColor } from '../../theme/palette'
 import InfoTooltip from '../InfoTooltip'
+import { useT } from '../../i18n/useT'
 
 export default function LineageCoverageCard() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
   const setSelectedSubjectId = useStore((s) => s.setSelectedSubjectId)
   const [data, setData] = useState<LineageCoverageResponse | null>(null)
@@ -19,12 +21,12 @@ export default function LineageCoverageCard() {
       <CardContent>
         <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
           <Typography variant="subtitle1" gutterBottom sx={{ mb: 0 }}>
-            Lineage 覆蓋率:出事時看不看得到影響範圍?
+            {t('gov.lineage.title')}
           </Typography>
-          <InfoTooltip text="完全沒有 lineage 的資料集是「盲點」——壞掉的時候沒人知道會影響誰。下游依賴多但 Level 又低的資料集,一旦出問題影響會擴散最廣,應該優先補強。" />
+          <InfoTooltip text={t('gov.lineage.tooltip')} />
         </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-          有 lineage 記錄的資料集佔比
+          {t('gov.lineage.subtitle')}
         </Typography>
 
         <Box sx={{ mb: 2 }}>
@@ -32,14 +34,14 @@ export default function LineageCoverageCard() {
             {data ? `${data.coverage_pct}%` : '—'}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {data ? `${data.covered} / ${data.total_subjects} 個 data subject 有 lineage 記錄` : ''}
+            {data ? t('gov.lineage.detail', { covered: data.covered, total: data.total_subjects }) : ''}
           </Typography>
         </Box>
 
         {data && data.islands.length > 0 && (
           <Box sx={{ mb: 2 }}>
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-              完全沒有 lineage 的孤島({data.islands.length})
+              {t('gov.lineage.islandsTitle', { n: data.islands.length })}
             </Typography>
             <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
               {data.islands.map((i) => (
@@ -58,7 +60,7 @@ export default function LineageCoverageCard() {
         {data && data.risk_hubs.length > 0 && (
           <Box>
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-              高影響力樞紐(下游依賴多、Level 卻偏低)
+              {t('gov.lineage.hubsTitle')}
             </Typography>
             <Stack spacing={0.8}>
               {data.risk_hubs.slice(0, 6).map((h) => (
@@ -73,7 +75,7 @@ export default function LineageCoverageCard() {
                     <Typography variant="body2">{h.name}</Typography>
                   </Stack>
                   <Typography variant="caption" color="text.secondary">
-                    {h.fan_out} 個下游依賴 · L{h.maturity_level}
+                    {t('gov.lineage.hubDetail', { fanOut: h.fan_out, level: h.maturity_level })}
                   </Typography>
                 </Stack>
               ))}

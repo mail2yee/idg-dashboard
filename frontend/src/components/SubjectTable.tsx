@@ -5,8 +5,10 @@ import { api, type Subject } from '../api/client'
 import { useStore } from '../state/store'
 import { domainColor } from '../theme/palette'
 import { getLevelColor } from '../theme/badges'
+import { useT } from '../i18n/useT'
 
 export default function SubjectTable() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
   const maxLevel = useStore((s) => s.maxLevel)
   const selectedDomain = useStore((s) => s.selectedDomain)
@@ -105,7 +107,7 @@ export default function SubjectTable() {
           <Typography variant="subtitle2">Data Subjects ({subjects.length})</Typography>
           <TextField
             size="small"
-            placeholder="搜尋 subject 名稱…"
+            placeholder={t('subjects.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             sx={{ width: 240 }}

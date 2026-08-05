@@ -5,10 +5,12 @@ import { useStore } from '../state/store'
 import DimensionHeatmap from '../components/DimensionHeatmap'
 import { categorical } from '../theme/palette'
 import InfoTooltip from '../components/InfoTooltip'
+import { useT } from '../i18n/useT'
 
 type Scope = 'domain' | 'subject'
 
 export default function KpiBreakdownPage() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
   const dims = useStore((s) => s.dimensions)
   const setSelectedDomainDetail = useStore((s) => s.setSelectedDomainDetail)
@@ -41,12 +43,12 @@ export default function KpiBreakdownPage() {
         <CardContent>
           <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
             <Typography variant="subtitle1" gutterBottom sx={{ mb: 0 }}>
-              各 KPI 全公司平均
+              {t('kpi.orgAverage.title')}
             </Typography>
-            <InfoTooltip text="跟總覽頁的 Level 是兩個互補的視角:Level 是「有沒有達標」的階梯型分數,這裡是每個面向實際算出來的連續分數(0-1),用來看「還差多少」而不只是「過了沒」。" />
+            <InfoTooltip text={t('kpi.orgAverage.tooltip')} />
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            這 {dims.length} 個面向是構成 Maturity Level(L1-L5)的底層 KPI
+            {t('kpi.orgAverage.subtitle', { n: dims.length })}
           </Typography>
           <Grid container spacing={2}>
             {dims.map((d) => (
@@ -75,16 +77,19 @@ export default function KpiBreakdownPage() {
         <CardContent>
           <Stack direction="row" spacing={2} sx={{ mb: 1, alignItems: 'center' }}>
             <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
-              <Typography variant="subtitle1">KPI 拆解 — {scope === 'domain' ? '依 Domain' : '依 Data Subject'}</Typography>
-              <InfoTooltip text="顏色深淺只能拿來比較「同一欄」(同一個 KPI)在不同列之間的高低,不同 KPI 欄位之間的深淺不能直接比,因為每個面向的計算方式不一樣。" />
+              <Typography variant="subtitle1">
+                {t('kpi.breakdown.title')}
+                {t(scope === 'domain' ? 'trends.scopeByDomain' : 'trends.scopeBySubject')}
+              </Typography>
+              <InfoTooltip text={t('kpi.breakdown.tooltip')} />
             </Stack>
             <ToggleButtonGroup size="small" value={scope} exclusive onChange={(_, v) => v && setScope(v)}>
-              <ToggleButton value="domain">依 Domain</ToggleButton>
-              <ToggleButton value="subject">依 Data Subject</ToggleButton>
+              <ToggleButton value="domain">{t('trends.scopeByDomain')}</ToggleButton>
+              <ToggleButton value="subject">{t('trends.scopeBySubject')}</ToggleButton>
             </ToggleButtonGroup>
           </Stack>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 2, display: 'block' }}>
-            顏色越深代表分數越高;點一列可以看詳細狀況
+            {t('kpi.breakdown.caption')}
           </Typography>
           <DimensionHeatmap
             rows={rows}

@@ -26,10 +26,10 @@ import { getLevelColor } from '../theme/badges'
 import { tooltipStyle, FONT_FAMILY, formatWeekLabel } from '../theme/echartsTheme'
 import DeltaBadge from '../components/DeltaBadge'
 import InfoTooltip from '../components/InfoTooltip'
+import { useT } from '../i18n/useT'
 
 type Scope = 'domain' | 'subject'
 
-const PERIOD_LABELS: Record<Period, string> = { week: '週', month: '月', year: '年' }
 const PERIOD_DELTA_LABELS: Record<Period, string> = { week: 'WoW', month: 'MoM', year: 'YoY' }
 
 interface FocusedSeries {
@@ -44,6 +44,7 @@ interface FocusOption {
 }
 
 export default function TrendsPage() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
   const maxLevel = useStore((s) => s.maxLevel)
   const setSelectedSubjectId = useStore((s) => s.setSelectedSubjectId)
@@ -117,6 +118,8 @@ export default function TrendsPage() {
   }
 
   const c = chrome[mode]
+  const periodLabel = (p: Period) =>
+    t(p === 'week' ? 'trends.periodWeek' : p === 'month' ? 'trends.periodMonth' : 'trends.periodYear')
 
   // Default view: stacked bar (composition) + an overlaid line per level, so
   // each level's own count trend is readable, not just the proportions.
@@ -126,7 +129,7 @@ export default function TrendsPage() {
       .map(Number)
       .sort((a, b) => a - b)
     const dateLabels = distribution.dates.map(formatWeekLabel)
-    const unitLabel = scope === 'domain' ? '個 Domain 數' : '個 Data Subject 數'
+    const unitLabel = t(scope === 'domain' ? 'trends.unitDomainCount' : 'trends.unitSubjectCount')
     return {
       animation: false,
       grid: { left: 56, right: 24, top: 16, bottom: 78 },
@@ -139,7 +142,7 @@ export default function TrendsPage() {
       xAxis: {
         type: 'category',
         data: dateLabels,
-        name: '週次(每個點代表一週的週一)',
+        name: t('trends.weekAxisLabel'),
         nameLocation: 'middle',
         nameGap: 40,
         nameTextStyle: { color: c.textSecondary, fontSize: 12, fontFamily: FONT_FAMILY },
@@ -190,7 +193,7 @@ export default function TrendsPage() {
         })),
       ],
     }
-  }, [distribution, mode, c, scope])
+  }, [distribution, mode, c, scope, t])
 
   const accent = categorical[mode][0]
   const focusedOption = useMemo(() => {
@@ -203,7 +206,7 @@ export default function TrendsPage() {
       xAxis: {
         type: 'category',
         data: dateLabels,
-        name: '週次(每個點代表一週的週一)',
+        name: t('trends.weekAxisLabel'),
         nameLocation: 'middle',
         nameGap: 40,
         nameTextStyle: { color: c.textSecondary, fontSize: 12, fontFamily: FONT_FAMILY },
@@ -243,7 +246,7 @@ export default function TrendsPage() {
         },
       ],
     }
-  }, [focused, mode, c, accent, maxLevel])
+  }, [focused, mode, c, accent, maxLevel, t])
 
   const domainColumns: GridColDef<DomainTrendSummary>[] = useMemo(
     () => [
@@ -260,7 +263,7 @@ export default function TrendsPage() {
       },
       {
         field: 'avg_maturity_level',
-        headerName: '目前分數',
+        headerName: t('trends.currentScore'),
         flex: 0.8,
         type: 'number',
         renderCell: (params) => (
@@ -281,7 +284,7 @@ export default function TrendsPage() {
         ),
       },
     ],
-    [mode, period],
+    [mode, period, t],
   )
 
   const subjectColumns: GridColDef<SubjectTrendSummary>[] = useMemo(
@@ -300,7 +303,7 @@ export default function TrendsPage() {
       },
       {
         field: 'maturity_level',
-        headerName: '目前 Level',
+        headerName: t('trends.currentLevel'),
         flex: 0.7,
         type: 'number',
         renderCell: (params) => (
@@ -321,7 +324,7 @@ export default function TrendsPage() {
         ),
       },
     ],
-    [mode, period],
+    [mode, period, t],
   )
 
   return (
@@ -331,11 +334,9 @@ export default function TrendsPage() {
           <Stack direction="row" sx={{ mb: 1, alignItems: 'center', justifyContent: 'space-between' }}>
             <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
               <Typography variant="subtitle1">
-                {focused ? focused.label : scope === 'domain' ? `全部 Domain 的 Level 分佈` : `全部 Data Subject 的 Level 分佈`}
+                {focused ? focused.label : t(scope === 'domain' ? 'trends.viewingAllDomains' : 'trends.viewingAllSubjects')}
               </Typography>
-              {!focused && (
-                <InfoTooltip text="堆疊長條本身因為底線一直在跳動,不容易單獨看中間某個顏色的漲跌,所以每個 Level 又疊了一條粗線,單獨畫出「這個 Level 的數量」自己隨週次的走勢,方便追蹤單一 Level 是變多還是變少。" />
-              )}
+              {!focused && <InfoTooltip text={t('trends.stackedTooltip')} />}
             </Stack>
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <Autocomplete
@@ -345,21 +346,24 @@ export default function TrendsPage() {
                 onChange={(_, val) => handleFocusChange(val)}
                 isOptionEqualToValue={(a, b) => a.key === b.key}
                 renderInput={(params) => (
-                  <TextField {...params} label={`只看某個 ${scope === 'domain' ? 'Domain' : 'Data Subject'}`} />
+                  <TextField {...params} label={t(scope === 'domain' ? 'trends.viewOnlyDomain' : 'trends.viewOnlySubject')} />
                 )}
                 sx={{ width: 260 }}
               />
               <ToggleButtonGroup size="small" value={period} exclusive onChange={(_, v) => v && setPeriod(v)}>
-                <ToggleButton value="week">週</ToggleButton>
-                <ToggleButton value="month">月</ToggleButton>
-                <ToggleButton value="year">年</ToggleButton>
+                <ToggleButton value="week">{t('trends.periodWeek')}</ToggleButton>
+                <ToggleButton value="month">{t('trends.periodMonth')}</ToggleButton>
+                <ToggleButton value="year">{t('trends.periodYear')}</ToggleButton>
               </ToggleButtonGroup>
             </Stack>
           </Stack>
           <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
             {focused
-              ? `過去 ${focused.dates.length} 週${period !== 'week' ? `(約${PERIOD_LABELS[period]}對比)` : ''}的 Maturity Level 趨勢`
-              : `淺色堆疊長條 = 這週${scope === 'domain' ? 'Domain' : 'data subject'}總數在 5 個 Level 間的組成比例;粗線 = 各 Level 數量隨週次的走勢`}
+              ? t('trends.focusedTrend', {
+                  n: focused.dates.length,
+                  compare: period !== 'week' ? t('trends.periodCompareSuffix', { period: periodLabel(period) }) : '',
+                })
+              : t('trends.stackedCaption', { scope: scope === 'domain' ? 'Domain' : 'data subject' })}
           </Typography>
           <Box sx={{ height: 380 }}>
             {focused && focusedOption && (
@@ -376,10 +380,13 @@ export default function TrendsPage() {
         <CardContent>
           <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-              <Typography variant="subtitle1">週 / 月 / 年變化 — {scope === 'domain' ? '依 Domain' : '依 Data Subject'}</Typography>
+              <Typography variant="subtitle1">
+                {t('trends.headerPrefix')}
+                {t(scope === 'domain' ? 'trends.scopeByDomain' : 'trends.scopeBySubject')}
+              </Typography>
               <ToggleButtonGroup size="small" value={scope} exclusive onChange={(_, v) => v && setScope(v)}>
-                <ToggleButton value="domain">依 Domain</ToggleButton>
-                <ToggleButton value="subject">依 Data Subject</ToggleButton>
+                <ToggleButton value="domain">{t('trends.scopeByDomain')}</ToggleButton>
+                <ToggleButton value="subject">{t('trends.scopeBySubject')}</ToggleButton>
               </ToggleButtonGroup>
             </Stack>
             {scope === 'subject' && (
@@ -392,7 +399,7 @@ export default function TrendsPage() {
                   onChange={(e) => setDomainFilter(e.target.value)}
                   sx={{ width: 160 }}
                 >
-                  <MenuItem value="">全部</MenuItem>
+                  <MenuItem value="">{t('trends.domainFilterAll')}</MenuItem>
                   {DOMAIN_ORDER.map((d) => (
                     <MenuItem key={d} value={d}>
                       {d}
@@ -401,7 +408,7 @@ export default function TrendsPage() {
                 </TextField>
                 <TextField
                   size="small"
-                  placeholder="搜尋 subject 名稱…"
+                  placeholder={t('subjects.searchPlaceholder')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   sx={{ width: 220 }}
@@ -411,8 +418,10 @@ export default function TrendsPage() {
           </Stack>
 
           <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-            點欄位標題可依 {PERIOD_DELTA_LABELS[period]} 排序,快速看出進步最多或退步最多的{scope === 'domain' ? 'Domain' : 'data subject'}。
-            點一列可以聚焦上方趨勢圖,也會開詳細成長狀況。
+            {t('trends.sortHint', {
+              delta: PERIOD_DELTA_LABELS[period],
+              scope: scope === 'domain' ? 'Domain' : 'data subject',
+            })}
           </Typography>
 
           <Box sx={{ height: 420 }}>

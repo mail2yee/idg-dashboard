@@ -9,8 +9,10 @@ import { chrome, categorical, domainColor } from '../theme/palette'
 import { baseAxis, tooltipStyle, formatWeekLabel } from '../theme/echartsTheme'
 import DeltaBadge from './DeltaBadge'
 import InfoTooltip from './InfoTooltip'
+import { useT } from '../i18n/useT'
 
 export default function OwnerTeamDetailDrawer() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
   const maxLevel = useStore((s) => s.maxLevel)
   const dimensionLabels = useStore((s) => s.dimensions)
@@ -69,12 +71,12 @@ export default function OwnerTeamDetailDrawer() {
               </IconButton>
             </Stack>
             <Typography variant="caption" color="text.secondary">
-              依 Data Owner 所屬單位聚合(Data Steward / IT Owner 個別姓名只會出現在單一 subject 的詳情裡)
+              {t('teamDrawer.subtitle')}
             </Typography>
 
             <Stack direction="row" spacing={3} sx={{ mt: 1.5, alignItems: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                目前 {detail.avg_maturity_level.toFixed(2)} / L{maxLevel}
+                {t('drawer.currentScore')} {detail.avg_maturity_level.toFixed(2)} / L{maxLevel}
               </Typography>
               <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                 <Typography variant="caption" color="text.secondary">
@@ -93,7 +95,7 @@ export default function OwnerTeamDetailDrawer() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="subtitle2" gutterBottom>
-              過去 8 週趨勢
+              {t('drawer.past8Weeks')}
             </Typography>
             <Box sx={{ height: 160 }}>
               {trendOption && <ReactECharts option={trendOption} style={{ height: '100%', width: '100%' }} opts={{ renderer: 'svg' }} />}
@@ -103,9 +105,9 @@ export default function OwnerTeamDetailDrawer() {
 
             <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
               <Typography variant="subtitle2" gutterBottom sx={{ mb: 0 }}>
-                旗下 subjects 平均 KPI 拆解(構成 Maturity Level 的底層指標)
+                {t('teamDrawer.kpiTitle')}
               </Typography>
-              <InfoTooltip text="這裡是連續分數(0-1),跟上面的 Maturity Level 階梯是互補視角——Level 卡在某一級時,這裡可以看出是哪個面向拖累的。" />
+              <InfoTooltip text={t('drawer.kpiTooltip')} />
             </Stack>
             <Stack spacing={1.2}>
               {Object.entries(detail.avg_sub_scores).map(([key, value]) => (
@@ -145,7 +147,7 @@ export default function OwnerTeamDetailDrawer() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="subtitle2" gutterBottom>
-              名下 Data Subjects ({detail.subjects.length})
+              {t('teamDrawer.subjectsTitle', { n: detail.subjects.length })}
             </Typography>
             <List dense disablePadding>
               {detail.subjects.map((s) => (

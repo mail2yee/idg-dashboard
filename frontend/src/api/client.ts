@@ -282,7 +282,7 @@ export const api = {
   subjectDetail: (id: string) => get<SubjectDetail>(`/subjects/${id}`),
   subjectTrend: (id: string, period: Period = 'week') =>
     get<{ trend: MaturitySnapshot[] }>(`/subjects/${id}/trend?period=${period}`),
-  agentQuery: (question: string) => post<AgentResponse>('/agent/query', { question }),
+  agentQuery: (question: string, lang: 'en' | 'zh' = 'en') => post<AgentResponse>('/agent/query', { question, lang }),
   governanceRiskPriority: (limit = 15) => get<RiskPriorityResponse>(`/governance/risk-priority?limit=${limit}`),
   governanceOwnershipCoverage: () => get<OwnershipCoverageResponse>('/governance/ownership-coverage'),
   governanceStewardship: () => get<StewardshipResponse>('/governance/stewardship'),
@@ -301,13 +301,17 @@ export interface AgentChatCallbacks {
 // reads the fetch response body as a raw stream and parses `data: {...}\n\n`
 // frames itself (same approach as the intelligent-data-governance-agent-onprem
 // project's streamChat()).
-export async function streamAgentChat(question: string, callbacks: AgentChatCallbacks = {}): Promise<void> {
+export async function streamAgentChat(
+  question: string,
+  callbacks: AgentChatCallbacks = {},
+  lang: 'en' | 'zh' = 'en',
+): Promise<void> {
   const { onStep, onToken, onFinal, onError } = callbacks
   try {
     const res = await fetch('/api/agent/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({ question, lang }),
     })
     if (!res.ok || !res.body) throw new Error(`POST /agent/chat failed: ${res.status}`)
 

@@ -5,8 +5,10 @@ import { api, type SubjectGrowthResponse } from '../../api/client'
 import { useStore } from '../../state/store'
 import { chrome, categorical, status } from '../../theme/palette'
 import InfoTooltip from '../InfoTooltip'
+import { useT } from '../../i18n/useT'
 
 export default function SubjectGrowthCard() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
   const setSelectedSubjectId = useStore((s) => s.setSelectedSubjectId)
   const [data, setData] = useState<SubjectGrowthResponse | null>(null)
@@ -50,19 +52,19 @@ export default function SubjectGrowthCard() {
       <CardContent>
         <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
           <Typography variant="subtitle1" gutterBottom sx={{ mb: 0 }}>
-            Data Subject 成長:是不是分類出了問題?
+            {t('gov.growth.title')}
           </Typography>
-          <InfoTooltip text="單一 data subject 不會自己「成長」,會變的是某個 Domain 底下的數量。短時間內暴增,可能是正常的新資料上架,但也可能是同一份資料被拆成好幾筆、或分類分錯 Domain——用絕對數量(不是百分比)當門檻,因為多數 Domain 本來就只有個位數到幾十筆,百分比在這個量級會太吵。" />
+          <InfoTooltip text={t('gov.growth.tooltip')} />
         </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ mb: 1.5, display: 'block' }}>
-          門檻:{data?.window_days ?? 7} 天內新增 ≥ {data?.flag_threshold ?? 3} 筆才標記
+          {t('gov.growth.thresholdLine', { days: data?.window_days ?? 7, threshold: data?.flag_threshold ?? 3 })}
         </Typography>
 
         <Stack direction="row" spacing={2} sx={{ mb: 2, alignItems: 'flex-end' }}>
           <Box>
             <Typography sx={{ fontSize: 36, fontWeight: 600, lineHeight: 1 }}>{data?.total_subjects ?? '—'}</Typography>
             <Typography variant="caption" color="text.secondary">
-              全公司 data subjects,近 {data?.window_days ?? 7} 天新增 {data?.new_subjects_total ?? 0} 筆
+              {t('gov.growth.totalDetail', { days: data?.window_days ?? 7, n: data?.new_subjects_total ?? 0 })}
             </Typography>
           </Box>
           <Box sx={{ flex: 1, height: 40 }}>
@@ -85,7 +87,7 @@ export default function SubjectGrowthCard() {
                   {d.domain}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  目前 {d.current_count} 筆 · 近 {data.window_days} 天 +{d.new_count}
+                  {t('gov.growth.domainDetail', { current: d.current_count, days: data.window_days, n: d.new_count })}
                 </Typography>
               </Stack>
               {d.flagged && d.new_subjects.length > 0 && (
@@ -107,7 +109,7 @@ export default function SubjectGrowthCard() {
 
         {data && data.flagged_domains.length === 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            目前沒有 Domain 短時間內大量新增,沒有需要特別確認的地方。
+            {t('gov.growth.noneFlagged')}
           </Typography>
         )}
       </CardContent>

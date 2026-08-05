@@ -6,9 +6,11 @@ import { useStore } from '../state/store'
 import { chrome, domainColor } from '../theme/palette'
 import { baseAxis, tooltipStyle, FONT_FAMILY } from '../theme/echartsTheme'
 import InfoTooltip from './InfoTooltip'
+import { useT } from '../i18n/useT'
 
 export default function DomainRankingChart() {
   const mode = useStore((s) => s.mode)
+  const t = useT()
   const maxLevel = useStore((s) => s.maxLevel)
   const selectedDomain = useStore((s) => s.selectedDomain)
   const setSelectedDomain = useStore((s) => s.setSelectedDomain)
@@ -76,9 +78,9 @@ export default function DomainRankingChart() {
       <CardContent>
         <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
           <Typography variant="subtitle2" gutterBottom sx={{ mb: 0 }}>
-            Domain Maturity 排名
+            {t('overview.domainRanking.title')}
           </Typography>
-          <InfoTooltip text="每個 Domain 底下所有 data subject 的 Maturity Level 平均值,由高到低排序。點一個 Domain 可以篩選下面的清單只看那個 Domain。" />
+          <InfoTooltip text={t('overview.domainRanking.tooltip')} />
         </Stack>
         <Box sx={{ height: 260 }}>
           <ReactECharts

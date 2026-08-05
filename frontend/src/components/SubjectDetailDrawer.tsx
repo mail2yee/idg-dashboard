@@ -19,6 +19,7 @@ import { chrome, categorical, status, domainColor } from '../theme/palette'
 import { getLevelColor } from '../theme/badges'
 import { baseAxis, tooltipStyle, formatWeekLabel } from '../theme/echartsTheme'
 import InfoTooltip from './InfoTooltip'
+import { useT } from '../i18n/useT'
 
 const ROLE_LABELS: Record<string, string> = {
   DATA_OWNER: 'Data Owner',
@@ -28,6 +29,7 @@ const ROLE_LABELS: Record<string, string> = {
 const ROLE_ORDER = ['DATA_OWNER', 'DATA_STEWARD', 'IT_OWNER']
 
 export default function SubjectDetailDrawer() {
+  const t = useT()
   const mode = useStore((s) => s.mode)
   const maxLevel = useStore((s) => s.maxLevel)
   const dimensionLabels = useStore((s) => s.dimensions)
@@ -99,7 +101,7 @@ export default function SubjectDetailDrawer() {
             </Stack>
 
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-              {detail.subject.description || '（無 description）'}
+              {detail.subject.description || t('subjectDrawer.noDescription')}
             </Typography>
 
             <Divider sx={{ my: 2 }} />
@@ -115,9 +117,9 @@ export default function SubjectDetailDrawer() {
 
             <Stack direction="row" spacing={0} sx={{ alignItems: 'center' }}>
               <Typography variant="subtitle2" gutterBottom sx={{ mb: 0 }}>
-                KPI 拆解(構成 Maturity Level 的底層指標)
+                {t('subjectDrawer.kpiTitle')}
               </Typography>
-              <InfoTooltip text="這裡是連續分數(0-1),跟上面的 Maturity Level 階梯是互補視角——Level 卡在某一級時,這裡可以看出是哪個面向拖累的。" />
+              <InfoTooltip text={t('drawer.kpiTooltip')} />
             </Stack>
             <Stack spacing={1.2}>
               {detail.snapshot &&
@@ -158,7 +160,7 @@ export default function SubjectDetailDrawer() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="subtitle2" gutterBottom>
-              負責人
+              {t('subjectDrawer.ownersTitle')}
             </Typography>
             <Stack spacing={0.8} sx={{ mb: 1 }}>
               {ROLE_ORDER.map((role) => {
@@ -174,7 +176,7 @@ export default function SubjectDetailDrawer() {
                       </Typography>
                     ) : (
                       <Typography variant="body2" color="text.secondary">
-                        未指派
+                        {t('subjectDrawer.unassigned')}
                       </Typography>
                     )}
                   </Stack>
@@ -185,12 +187,12 @@ export default function SubjectDetailDrawer() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="subtitle2" gutterBottom>
-              Assertions ({detail.assertions.length})
+              {t('subjectDrawer.assertionsTitle', { n: detail.assertions.length })}
             </Typography>
             <Stack spacing={0.5} sx={{ mb: 2 }}>
               {detail.assertions.length === 0 && (
                 <Typography variant="caption" color="text.secondary">
-                  尚未設置任何 assertion
+                  {t('subjectDrawer.noAssertions')}
                 </Typography>
               )}
               {detail.assertions.map((a) => (
@@ -208,12 +210,12 @@ export default function SubjectDetailDrawer() {
             </Stack>
 
             <Typography variant="subtitle2" gutterBottom>
-              Incidents ({detail.incidents.length})
+              {t('subjectDrawer.incidentsTitle', { n: detail.incidents.length })}
             </Typography>
             <Stack spacing={0.5}>
               {detail.incidents.length === 0 && (
                 <Typography variant="caption" color="text.secondary">
-                  沒有 incident 紀錄
+                  {t('subjectDrawer.noIncidents')}
                 </Typography>
               )}
               {detail.incidents.map((i) => (
