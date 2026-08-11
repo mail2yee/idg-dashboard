@@ -552,6 +552,204 @@ backend/.venv-eval/bin/pytest -m eval -v
   See the AI agent bullet under Stack above for how it stays grounded.
 - Light/dark mode toggle (top-right), following the `dataviz` skill's
   validated palette in both modes
+- **報表 (Reports)** — a second, AG Charts/AG Grid-based dashboard page
+  (domain donut, governance KPI grid, dimension-breakdown combo chart),
+  built from a Figma reference. See "Reports page — wiring guide" below for
+  how each piece connects to the backend.
+
+## Reports page — wiring guide (AG Charts / AG Grid)
+
+The 報表 (Reports) tab is a second dashboard surface built with
+[AG Charts](https://www.ag-grid.com/charts/) and
+[AG Grid](https://www.ag-grid.com/) instead of ECharts/MUI X Data Grid,
+modeled on a Figma design. This section exists so you can lift these
+components into a connection against a different (company) backend without
+re-reading the source from scratch — for each piece: what it renders, what
+data shape it needs, and exactly what to change to repoint it.
+
+### Files
+
+```
+frontend/src/pages/ReportsPage.tsx                       -- container: breadcrumb, 3 KPI tiles, domain filter
+frontend/src/components/reports/ProductSuiteDonutChart.tsx   -- AG Charts donut
+frontend/src/components/reports/GovernanceKpiGrid.tsx        -- AG Grid table + 4 stats + 2 chips
+frontend/src/components/reports/DimensionBreakdownChart.tsx  -- AG Charts stacked-bar + line combo
+```
+
+Plus two small edits to existing files that any copy of this page needs:
+`frontend/src/main.tsx` (module registration, see "Setup gotchas" below)
+and `frontend/src/App.tsx` (adds the `reports` tab).
+
+### Data-flow convention
+
+Same pattern as every other page in this app (Overview/Trends/Governance):
+**no shared cache, no Redux** — each component owns a `useState` and fetches
+its own data independently in a `useEffect` on mount (see e.g.
+`RiskPriorityChart.tsx` for the pre-existing example this follows). Two of
+the four Reports components additionally take a `domainFilter: string | null`
+prop from `ReportsPage.tsx` and re-fetch (`GovernanceKpiGrid.tsx`) or
+re-filter client-side (`ProductSuiteDonutChart.tsx`,
+`DimensionBreakdownChart.tsx`) when it changes.
+
+### Component-by-component
+
+**1. `ReportsPage.tsx` — the 3 KPI tiles + breadcrumb + domain filter**
+
+- Fetches: `api.maturitySummary()` → `{ latest: OrgSnapshot }`,
+  `api.domainRanking()` → `{ domains: OrgSnapshot[] }`.
+- The 3 tiles (Domain count / Data Subject count / Maturity Level) are
+  computed client-side from those two responses, switching between the
+  global snapshot and the filtered domain's row depending on
+  `domainFilter`.
+- Owns the `domainFilter` state (a plain `useState<string>`, driven by a
+  MUI `TextField select` populated from `palette.ts`'s `DOMAIN_ORDER`) and
+  passes it down to the three child components below.
+- **To repoint**: swap the two `api.*()` calls for your own fetches. Any
+  response works as long as it (or your reshape of it) has `domain`,
+  `subject_count`, and `avg_maturity_level` fields — those are the only
+  fields this file reads.
+
+**2. `ProductSuiteDonutChart.tsx` — AG Charts donut ("Data Subject Count by
+Domain")**
+
+- Fetches `api.domainRanking()` again (independently — this is deliberate,
+  see "Data-flow convention" above, not a bug).
+- Needs an array of `{ domain: string, subject_count: number }`.
+- AG Charts wiring:
+  ```tsx
+  <AgCharts options={options} style={{ height: '100%', width: '100%' }} />
+  ```
+  where `options.data = rows.map(d => ({ domain: d.domain, count: d.subject_count }))`
+  and `options.series = [{ type: 'donut', angleKey: 'count',
+  calloutLabelKey: 'domain', itemStyler: (p) => ({ fill: domainColor(p.datum.domain, mode) }) }]`.
+  `options` is typed `AgPolarChartOptions` (see "Setup gotchas" for why the
+  type annotation matters).
+- Colors come from `domainColor()` in `theme/palette.ts`, which looks the
+  domain name up in the hardcoded `DOMAIN_ORDER` array — **the same
+  gotcha documented elsewhere in this README**: if your company's domain
+  names differ, update `DOMAIN_ORDER` to match exactly (case-sensitive) or
+  that domain's slice silently renders in the palette's last fallback
+  color instead of erroring.
+- **To repoint**: swap the `api.domainRanking()` call; keep the
+  `{ domain, subject_count }` shape (or adjust the one-line `.map()` in
+  the `rows` computation if your field names differ).
+
+**3. `GovernanceKpiGrid.tsx` — AG Grid table + 4 stat numbers + 2 chips**
+
+- Fetches 5 endpoints: `api.governanceOwnershipCoverage()`,
+  `api.governanceLineageCoverage()`, `api.governanceStewardship()`,
+  `api.maturitySummary()` (for the 4 stat numbers), and
+  `api.subjects({ domain: domainFilter })` (for the grid's rows).
+- The 4 stat numbers are plain computed values (coverage/DQI percentages,
+  plus a client-computed "on-time %" = `1 - overdue/open` across
+  `stewardship.teams`). The 2 chips (`Val. >4` / `Val. <2`) are also
+  client-computed: percentage of the currently-fetched `subjects` whose
+  `maturity_level` is above/below those thresholds.
+- AG Grid wiring:
+  ```tsx
+  <AgGridReact theme={theme} rowData={subjects} columnDefs={columnDefs} getRowId={(p) => p.data.id} />
+  ```
+  `theme` is built with the **new Theming API** (AG Grid v33+):
+  `themeQuartz.withParams({ backgroundColor, foregroundColor, ... })`, then
+  `.withPart(colorSchemeDark)` when `mode === 'dark'`. This is a different
+  API from the older CSS-class themes (`ag-theme-quartz` classNames) — if
+  you're pinned to an older ag-grid-community major version, this call
+  won't exist and you'd use the CSS-class approach instead.
+- `columnDefs` are **generated dynamically**: 3 fixed columns
+  (name/domain/maturity_level) + one column per entry in
+  `useStore(s => s.dimensions)` — which is itself populated once at app
+  startup (`App.tsx`'s `useEffect` calling `api.configDimensions()`) from
+  the backend's `/config/dimensions` endpoint
+  (`backend/config/maturity_dimensions.json`). This means the readiness-dot
+  columns automatically match however many scoring dimensions your
+  company's config defines — nothing to hand-edit here even if you add or
+  rename a dimension.
+- Each dot's `cellRenderer` reads `subject.sub_scores[dim.key]` and renders
+  green if `score >= READY_THRESHOLD` (a hardcoded `0.7` constant at the
+  top of the file — this is an arbitrary "ready" cutoff I picked to match
+  the Figma reference's look, not a real business rule; change it to
+  whatever your company means by "ready").
+- **To repoint**: swap the 5 `api.*()` calls. Keep the `Subject` shape's
+  `maturity_level: number | null` and `sub_scores: Record<string, number>`
+  fields (or adjust `columnDefs`'/`ReadyDot`'s field access if your
+  schema differs), and keep the 4 governance responses' `coverage_pct` /
+  `data_quality_index` / `teams[].{open_count,overdue_count}` fields.
+
+**4. `DimensionBreakdownChart.tsx` — AG Charts stacked-bar + line combo**
+("Maturity Level by Domain")
+
+- Fetches `api.domainsDimensionBreakdown()` →
+  `{ domain, api, metadata, lineage, alerting, freshness }` per domain, and
+  `api.domainRanking()` again (for each domain's `avg_maturity_level`, used
+  as the overlay line's values).
+- Also reads `useStore(s => s.dimensions)` (same source as the grid above)
+  to build one `bar` series per dimension key, plus one `line` series for
+  `maturity`.
+- AG Charts wiring/gotchas worth knowing before you touch this file:
+  - `options.axes` is a **dictionary** `{ x: {...}, y: {...} }` in
+    ag-charts-community v14 (this app's pinned version), **not an array**
+    like some older AG Charts versions or other charting libraries use —
+    `tsc -b` will reject an array here with a confusing
+    "index signature ... is missing" error.
+  - `AgChartOptions` (the generic union type) doesn't narrow correctly for
+    TypeScript when you build a cartesian chart's `series`/`axes` inline —
+    type the options object explicitly as `AgCartesianChartOptions` (or
+    `AgPolarChartOptions` for the donut above); otherwise `tsc -b` picks
+    the wrong branch of the union and rejects valid cartesian/polar-only
+    options. **This is the one lesson from building this page most worth
+    remembering** — `npx tsc --noEmit` will not necessarily catch it the
+    same way; always do a final check with `tsc -b` (the real build
+    command) per this repo's existing testing convention.
+  - All 5 dimension `bar` series share the same `stackGroup: 'dims'`
+    string — that's what makes them stack instead of grouping
+    side-by-side.
+- **To repoint**: swap the 2 `api.*()` calls; keep each domain row's
+  dimension-key fields (matching whatever `useStore(s => s.dimensions)`
+  resolves to) and an `avg_maturity_level` (or equivalent) field for the
+  line.
+
+### Setup gotchas (easy to lose if you copy just one component elsewhere)
+
+- **Module registration is mandatory and easy to forget.** Both AG Grid and
+  AG Charts throw `"No modules have been registered"` and crash the whole
+  React tree (not just that one chart) if you use them before calling:
+  ```ts
+  import { ModuleRegistry as GridReg, AllCommunityModule as GridAll } from 'ag-grid-community'
+  import { ModuleRegistry as ChartReg, AllCommunityModule as ChartAll } from 'ag-charts-community'
+  GridReg.registerModules([GridAll])
+  ChartReg.registerModules([ChartAll])
+  ```
+  This app does it once, at module scope, in `frontend/src/main.tsx` (before
+  `createRoot(...).render(...)`) — not per-component, so a fresh app needs
+  this once, not once per file.
+- **Four packages, not two**: `ag-grid-community` + `ag-grid-react`, and
+  separately `ag-charts-community` + `ag-charts-react` — the `-react`
+  packages are thin wrapper components (`<AgGridReact>`, `<AgCharts>`); the
+  `-community` packages hold the actual engine + module registry + types.
+
+### Repointing at your company's backend — three options
+
+- **Path A — keep the same response shapes.** Point `frontend/src/api/client.ts`'s
+  fetch base (the `/api` prefix, proxied by `vite.config.ts` in dev and by
+  `frontend/nginx.conf` in the deployed container) at your company's
+  backend instead of this repo's FastAPI app. Zero component changes, as
+  long as your endpoints return the same JSON shapes as
+  `backend/app/routers/{domains,subjects,governance,maturity,config}.py`.
+- **Path B — different shapes, same interface.** Keep every function name
+  in `api.client.ts`'s `export const api = { ... }` object as the
+  boundary; change what's *inside* each one to call your real endpoint and
+  reshape the response into the existing TypeScript types
+  (`OrgSnapshot`, `Subject`, `DomainDimensionBreakdown`, etc., all defined
+  at the top of `client.ts`). None of the 4 Reports files need to change.
+- **Path C — lifting just these files into a different React app.** The 4
+  files' only dependencies outside themselves are: `api/client.ts`'s type
+  imports (swap for your own types), `theme/palette.ts`'s `chrome` /
+  `domainColor` / `categorical` (swap for your own color tokens —
+  see the `dataviz` skill if you want the same validated-palette approach),
+  `state/store.ts`'s `mode` and `dimensions` (swap for however your app
+  tracks dark-mode + KPI-dimension config), and `i18n/useT.ts` (drop this
+  and replace every `t('key')` call with a plain string if you don't need
+  the EN/中 toggle).
 
 ## Known constraints
 
