@@ -10,6 +10,7 @@ import OverviewPage from './pages/OverviewPage'
 import TrendsPage from './pages/TrendsPage'
 import KpiBreakdownPage from './pages/KpiBreakdownPage'
 import GovernancePage from './pages/GovernancePage'
+import ReportsPage from './pages/ReportsPage'
 import SubjectDetailDrawer from './components/SubjectDetailDrawer'
 import DomainDetailDrawer from './components/DomainDetailDrawer'
 import OwnerTeamDetailDrawer from './components/OwnerTeamDetailDrawer'
@@ -23,7 +24,7 @@ export default function App() {
   const setDimensionConfig = useStore((s) => s.setDimensionConfig)
   const setLevelConfig = useStore((s) => s.setLevelConfig)
   const theme = useMemo(() => buildMuiTheme(mode), [mode])
-  const [tab, setTab] = useState<'overview' | 'trends' | 'kpi' | 'governance'>('overview')
+  const [tab, setTab] = useState<'overview' | 'trends' | 'kpi' | 'governance' | 'reports'>('overview')
   const t = useT()
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function App() {
             <Tab value="trends" label={t('nav.trends')} sx={{ minHeight: 'auto' }} />
             <Tab value="kpi" label={t('nav.kpi')} sx={{ minHeight: 'auto' }} />
             <Tab value="governance" label={t('nav.governance')} sx={{ minHeight: 'auto' }} />
+            <Tab value="reports" label={t('nav.reports')} sx={{ minHeight: 'auto' }} />
           </Tabs>
           <ToggleButtonGroup
             size="small"
@@ -65,6 +67,7 @@ export default function App() {
         {tab === 'trends' && <TrendsPage />}
         {tab === 'kpi' && <KpiBreakdownPage />}
         {tab === 'governance' && <GovernancePage />}
+        {tab === 'reports' && <ReportsPage />}
       </Box>
       <SubjectDetailDrawer />
       <DomainDetailDrawer />
