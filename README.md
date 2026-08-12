@@ -552,17 +552,22 @@ backend/.venv-eval/bin/pytest -m eval -v
   See the AI agent bullet under Stack above for how it stays grounded.
 - Light/dark mode toggle (top-right), following the `dataviz` skill's
   validated palette in both modes
-- **報表 (Reports)** — a second, AG Charts/AG Grid-based dashboard page
-  (domain donut, governance KPI grid, dimension-breakdown combo chart),
-  built from a Figma reference. See "Reports page — wiring guide" below for
-  how each piece connects to the backend.
+- **報表 (Reports)** — a second, AG Charts/AG Grid-based dashboard surface
+  built from two Figma references, toggled between two views: **Global
+  Reports** (domain donut, governance KPI grid, dimension-breakdown combo
+  chart) and **Monthly Trend** (sparkline stat cards, 3 ranked Top3
+  panels, a dual-axis subject-count/maturity-level combo chart). See
+  "Reports page — wiring guide" below for how each piece connects to the
+  backend.
 
 ## Reports page — wiring guide (AG Charts / AG Grid)
 
 The 報表 (Reports) tab is a second dashboard surface built with
 [AG Charts](https://www.ag-grid.com/charts/) and
 [AG Grid](https://www.ag-grid.com/) instead of ECharts/MUI X Data Grid,
-modeled on a Figma design. This section exists so you can lift these
+modeled on two separate Figma references — a "Global Reports" view and a
+"Monthly Trend" view, toggled with the `GLOBAL REPORTS` / `MONTHLY TREND`
+buttons at the top of the tab. This section exists so you can lift these
 components into a connection against a different (company) backend without
 re-reading the source from scratch — for each piece: what it renders, what
 data shape it needs, and exactly what to change to repoint it.
@@ -570,15 +575,21 @@ data shape it needs, and exactly what to change to repoint it.
 ### Files
 
 ```
-frontend/src/pages/ReportsPage.tsx                       -- container: breadcrumb, 3 KPI tiles, domain filter
-frontend/src/components/reports/ProductSuiteDonutChart.tsx   -- AG Charts donut
-frontend/src/components/reports/GovernanceKpiGrid.tsx        -- AG Grid table + 4 stats + 2 chips
-frontend/src/components/reports/DimensionBreakdownChart.tsx  -- AG Charts stacked-bar + line combo
+frontend/src/pages/ReportsPage.tsx                       -- container: breadcrumb, view toggle, 3 KPI tiles, domain filter
+frontend/src/components/reports/ProductSuiteDonutChart.tsx   -- AG Charts donut (Global Reports view)
+frontend/src/components/reports/GovernanceKpiGrid.tsx        -- AG Grid table + 4 stats + 2 chips (Global Reports view)
+frontend/src/components/reports/DimensionBreakdownChart.tsx  -- AG Charts stacked-bar + line combo (Global Reports view)
+frontend/src/components/reports/MonthlyTrendView.tsx         -- container for the Monthly Trend view's own layout
+frontend/src/components/reports/SparklineChart.tsx           -- AG Charts micro line chart (Monthly Trend view's 2 stat cards)
+frontend/src/components/reports/MomentumTop3Panel.tsx         -- plain MUI ranked list (Monthly Trend view's 3 Top3 panels)
+frontend/src/components/reports/MonthlyTrendChart.tsx         -- AG Charts dual-axis combo (Monthly Trend view's main chart)
 ```
 
 Plus two small edits to existing files that any copy of this page needs:
 `frontend/src/main.tsx` (module registration, see "Setup gotchas" below)
-and `frontend/src/App.tsx` (adds the `reports` tab).
+and `frontend/src/App.tsx` (adds the `reports` tab). The Monthly Trend view
+additionally needed one small **backend** change — see its own section
+below.
 
 ### Data-flow convention
 
@@ -591,7 +602,7 @@ prop from `ReportsPage.tsx` and re-fetch (`GovernanceKpiGrid.tsx`) or
 re-filter client-side (`ProductSuiteDonutChart.tsx`,
 `DimensionBreakdownChart.tsx`) when it changes.
 
-### Component-by-component
+### Component-by-component (Global Reports view)
 
 **1. `ReportsPage.tsx` — the 3 KPI tiles + breadcrumb + domain filter**
 
@@ -708,6 +719,96 @@ Domain")**
   resolves to) and an `avg_maturity_level` (or equivalent) field for the
   line.
 
+### The Monthly Trend view (second Figma reference)
+
+Toggling to `MONTHLY TREND` swaps `ReportsPage.tsx`'s body for
+`MonthlyTrendView.tsx`, which lays out 2 stat cards, 3 ranked "Top3"
+panels, and one big combo chart. Unlike the Global Reports view, this
+view's own `MonthlyTrendChart.tsx` owns **its own** domain filter
+(a `useState` local to that one component) rather than sharing the
+page-level filter — this matches the Figma reference, where the
+"Product Suite" dropdown lives *inside* the chart's own card and doesn't
+affect the stat cards or Top3 panels above it. `ReportsPage.tsx` hides its
+own page-level domain `TextField` while this view is active, to avoid two
+confusing, unlinked filters on screen at once.
+
+**1. `SparklineChart.tsx` — the 2 stat cards' micro line charts**
+
+- Pure presentational: takes a `values: number[]` prop and renders a thin,
+  axis-less, legend-less, tooltip-less AG Charts line — no independent data
+  fetching of its own. `MonthlyTrendView.tsx` feeds it
+  `summary.trend.map(s => s.subject_count)` / `...avg_maturity_level` from
+  its own `api.maturitySummary()` call.
+- **To repoint**: nothing to change here — it's shape-agnostic, just an
+  array of numbers.
+
+**2. `MomentumTop3Panel.tsx` — the 3 ranked "Top3" list panels**
+
+- Also pure presentational (a `title` + `rows: Top3Row[]` prop), **not**
+  an AG Grid/AG Charts element — this is a plain MUI ranked list, the same
+  design call as the Global Reports view's KPI tiles/breadcrumb (see that
+  section above): three short rows with a rank badge is layout and text,
+  not a grid or a chart, so pulling in AG Grid for it would be a pointless
+  abstraction.
+- `MonthlyTrendView.tsx` computes all three panels' `rows` from data it
+  already fetches for the stat cards: `api.domainRanking()` (for the
+  share-of-total "Current Monthly Top3" panel — sorted by `subject_count`,
+  primary number = `subject_count / total * 100`, delta = `wow_delta`) and
+  `api.domainsTrendSummary('year')` (for the two "Yearly Momentum" panels
+  — sorted by `yoy_delta` ascending/descending, primary number =
+  `avg_maturity_level`, delta = `yoy_delta`).
+- **To repoint**: swap the two `api.*()` calls in `MonthlyTrendView.tsx`;
+  keep `domain`, `subject_count`, `avg_maturity_level`, `wow_delta`, and
+  `yoy_delta` fields (or adjust the three `.map()` calls that build each
+  panel's `rows`).
+
+**3. `MonthlyTrendChart.tsx` — the dual-axis combo chart (bar + per-domain
+lines + dashed maturity line)**
+
+- Fetches `api.domainsTrendSummary('year')` (per-domain subject-count
+  history) and `api.maturitySummary()` (org-wide subject-count + maturity
+  history for the bar and the dashed line), independently of
+  `MonthlyTrendView.tsx`'s own fetches of the same two endpoints — same
+  "no shared cache" convention as the rest of the app.
+- **This chart needed a small additive backend change.**
+  `/domains/trend-summary` (`backend/app/routers/domains.py`) previously
+  only returned each domain's `avg_maturity_level` history (`series`) —
+  nothing about subject-count history, which this chart's per-domain lines
+  need. Added two fields to that endpoint's response, both purely
+  additive (existing callers/tests are unaffected): `subject_count_series`
+  per domain (mirrors the existing `series` field, same window/slicing
+  logic) and a top-level `dates` array (one domain's snapshot dates
+  represent all of them, since every domain shares the same weekly
+  snapshot cadence). If you're repointing this chart at a different
+  backend, your equivalent endpoint needs to expose subject-count history
+  the same way, not just maturity-level history.
+- **Monthly bucketing is done client-side.** This app's underlying history
+  is weekly (`org_quality_index_snapshots`, one doc per domain per week —
+  see "Data model" above), but the Figma reference reads as a monthly
+  trend. `bucketByMonth()` in this file keeps only the *last* snapshot in
+  each calendar month, no backend rollup endpoint needed. If your backend
+  already has true monthly granularity, you can fetch it directly and
+  drop this bucketing step.
+- **Dual-axis wiring** — the trickiest AG Charts detail on this page: in
+  ag-charts-community v14 (this app's pinned version), a series binds to
+  a non-default axis via `yKeyAxis: 'y2'` (a string matching the `axes`
+  dictionary's key), **not** via a `keys: [...]` array on the axis itself
+  (the property name used by older/classic AG Charts docs you may find
+  online — it doesn't exist in this version's types and silently doesn't
+  compile the way you'd expect). The dashed maturity-level line is the
+  only series with `yKeyAxis: 'y2'` here; every bar/domain-line series
+  implicitly uses the default `'y'` axis.
+- Two series (`total` and `maturity`) are given `showInLegend: false` so
+  they don't appear in AG Charts' own auto-generated bottom legend
+  (which is left showing only the per-domain lines, matching the Figma
+  reference) — they're shown instead as two manually-built swatch chips
+  in the header row above the chart, next to the "Product Suite"/"Data
+  Range" filter controls.
+- **To repoint**: swap the two `api.*()` calls; keep each domain's
+  `subject_count_series` + a shared `dates` array (or equivalent), and
+  the org-wide `subject_count`/`avg_maturity_level` history for the bar
+  and dashed line.
+
 ### Setup gotchas (easy to lose if you copy just one component elsewhere)
 
 - **Module registration is mandatory and easy to forget.** Both AG Grid and
@@ -740,8 +841,8 @@ Domain")**
   boundary; change what's *inside* each one to call your real endpoint and
   reshape the response into the existing TypeScript types
   (`OrgSnapshot`, `Subject`, `DomainDimensionBreakdown`, etc., all defined
-  at the top of `client.ts`). None of the 4 Reports files need to change.
-- **Path C — lifting just these files into a different React app.** The 4
+  at the top of `client.ts`). None of the 8 Reports files need to change.
+- **Path C — lifting just these files into a different React app.** The 8
   files' only dependencies outside themselves are: `api/client.ts`'s type
   imports (swap for your own types), `theme/palette.ts`'s `chrome` /
   `domainColor` / `categorical` (swap for your own color tokens —
