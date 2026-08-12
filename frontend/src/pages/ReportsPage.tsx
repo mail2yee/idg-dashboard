@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Box, Grid, Stack, Typography, Breadcrumbs, TextField, MenuItem, Card, CardContent } from '@mui/material'
+import { Box, Grid, Stack, Typography, Breadcrumbs, TextField, MenuItem, Card, CardContent, ToggleButtonGroup, ToggleButton } from '@mui/material'
 import { api, type OrgSnapshot } from '../api/client'
 import { DOMAIN_ORDER } from '../theme/palette'
 import ProductSuiteDonutChart from '../components/reports/ProductSuiteDonutChart'
 import GovernanceKpiGrid from '../components/reports/GovernanceKpiGrid'
 import DimensionBreakdownChart from '../components/reports/DimensionBreakdownChart'
+import MonthlyTrendView from '../components/reports/MonthlyTrendView'
 import { useT } from '../i18n/useT'
 
 export default function ReportsPage() {
   const t = useT()
+  const [view, setView] = useState<'global' | 'monthly'>('global')
   const [domainFilter, setDomainFilter] = useState('')
   const [global, setGlobal] = useState<OrgSnapshot | null>(null)
   const [domains, setDomains] = useState<OrgSnapshot[] | null>(null)
@@ -42,53 +44,67 @@ export default function ReportsPage() {
         <Box>
           <Breadcrumbs sx={{ mb: 0.5 }}>
             <Typography variant="caption" color="text.secondary">
-              {t('reports.breadcrumb')}
+              {view === 'global' ? t('reports.breadcrumb') : t('reports.monthly.breadcrumb')}
             </Typography>
           </Breadcrumbs>
           <Typography variant="h5" sx={{ fontWeight: 600 }}>
-            {t('reports.title')}
+            {view === 'global' ? t('reports.title') : t('reports.monthly.title')}
           </Typography>
         </Box>
-        <TextField
-          size="small"
-          select
-          label={t('reports.domainFilterLabel')}
-          value={domainFilter}
-          onChange={(e) => setDomainFilter(e.target.value)}
-          sx={{ width: 180 }}
-        >
-          <MenuItem value="">{t('reports.domainFilterAll')}</MenuItem>
-          {DOMAIN_ORDER.map((d) => (
-            <MenuItem key={d} value={d}>
-              {d}
-            </MenuItem>
-          ))}
-        </TextField>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+          <ToggleButtonGroup size="small" value={view} exclusive onChange={(_, v) => v && setView(v)}>
+            <ToggleButton value="global">{t('reports.viewGlobal')}</ToggleButton>
+            <ToggleButton value="monthly">{t('reports.viewMonthly')}</ToggleButton>
+          </ToggleButtonGroup>
+          {view === 'global' && (
+            <TextField
+              size="small"
+              select
+              label={t('reports.domainFilterLabel')}
+              value={domainFilter}
+              onChange={(e) => setDomainFilter(e.target.value)}
+              sx={{ width: 180 }}
+            >
+              <MenuItem value="">{t('reports.domainFilterAll')}</MenuItem>
+              {DOMAIN_ORDER.map((d) => (
+                <MenuItem key={d} value={d}>
+                  {d}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+        </Stack>
       </Stack>
 
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <KpiTile label={t('reports.kpi.domain')} value={kpi.domainCount} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <KpiTile label={t('reports.kpi.subject')} value={kpi.subjectCount} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <KpiTile label={t('reports.kpi.maturity')} value={kpi.maturity.toFixed(1)} accent />
-        </Grid>
-      </Grid>
+      {view === 'global' ? (
+        <>
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <KpiTile label={t('reports.kpi.domain')} value={kpi.domainCount} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <KpiTile label={t('reports.kpi.subject')} value={kpi.subjectCount} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <KpiTile label={t('reports.kpi.maturity')} value={kpi.maturity.toFixed(1)} accent />
+            </Grid>
+          </Grid>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 5 }}>
-          <ProductSuiteDonutChart domainFilter={filter} />
-        </Grid>
-        <Grid size={{ xs: 12, md: 7 }}>
-          <GovernanceKpiGrid domainFilter={filter} />
-        </Grid>
-        <Grid size={12}>
-          <DimensionBreakdownChart domainFilter={filter} />
-        </Grid>
-      </Grid>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 5 }}>
+              <ProductSuiteDonutChart domainFilter={filter} />
+            </Grid>
+            <Grid size={{ xs: 12, md: 7 }}>
+              <GovernanceKpiGrid domainFilter={filter} />
+            </Grid>
+            <Grid size={12}>
+              <DimensionBreakdownChart domainFilter={filter} />
+            </Grid>
+          </Grid>
+        </>
+      ) : (
+        <MonthlyTrendView />
+      )}
     </Box>
   )
 }

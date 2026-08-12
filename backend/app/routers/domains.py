@@ -24,26 +24,36 @@ async def domains_ranking():
 
 @router.get("/domains/trend-summary")
 async def domains_trend_summary(period: str = "week"):
-    """Per-domain WoW/MoM/YoY deltas + a period-windowed level series."""
+    """Per-domain WoW/MoM/YoY deltas + a period-windowed level series.
+
+    `dates`/`subject_count_series` are additive (every domain shares the
+    same weekly snapshot cadence, so one domain's dates represent them
+    all) -- added for the Reports page's monthly-trend chart, which plots
+    subject-count history per domain, not just the level sparkline."""
     docs = await db.org_quality_index_snapshots.find({"scope_type": "DOMAIN"}).sort("snapshot_date", 1).to_list(length=None)
     by_domain: dict = {}
     for d in docs:
         by_domain.setdefault(d["domain"], []).append(d)
 
     window = period_window(period)
+    dates: list = []
     results = []
     for domain, series in by_domain.items():
         levels = [s["avg_maturity_level"] for s in series]
+        counts = [s["subject_count"] for s in series]
         deltas = compute_deltas(levels)
+        if not dates:
+            dates = [serialize(s["snapshot_date"]) for s in series[-window:]]
         results.append({
             "domain": domain,
             "avg_maturity_level": levels[-1],
             **deltas,
             "delta": period_delta(deltas, period),
             "series": levels[-window:],
+            "subject_count_series": counts[-window:],
         })
     results.sort(key=lambda x: -x["avg_maturity_level"])
-    return {"domains": results}
+    return {"domains": results, "dates": dates}
 
 
 @router.get("/domains/level-distribution")

@@ -64,6 +64,7 @@ export interface DomainTrendSummary extends PeriodDeltas {
   domain: string
   avg_maturity_level: number
   series: number[]
+  subject_count_series: number[]
 }
 
 export interface SubjectTrendSummary extends PeriodDeltas {
@@ -245,7 +246,7 @@ export const api = {
   configLevels: () => get<{ levels: LevelMeta[]; max_level: number }>('/config/levels'),
   domainRanking: () => get<{ domains: OrgSnapshot[] }>('/domains/ranking'),
   domainsTrendSummary: (period: Period = 'week') =>
-    get<{ domains: DomainTrendSummary[] }>(`/domains/trend-summary?period=${period}`),
+    get<{ domains: DomainTrendSummary[]; dates: string[] }>(`/domains/trend-summary?period=${period}`),
   domainDetail: (domain: string, period: Period = 'week') =>
     get<DomainDetail>(`/domains/${encodeURIComponent(domain)}/detail?period=${period}`),
   domainsDimensionBreakdown: () => get<{ domains: DomainDimensionBreakdown[] }>('/domains/dimension-breakdown'),

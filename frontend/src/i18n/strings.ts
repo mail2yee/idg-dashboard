@@ -221,6 +221,23 @@ export const en = {
   'reports.grid.colMaturity': 'Maturity Level',
   'reports.dimChart.title': 'Maturity Level by Domain (dimension breakdown)',
   'reports.dimChart.maturityLine': 'Maturity Level',
+  'reports.viewGlobal': 'Global Reports',
+  'reports.viewMonthly': 'Monthly Trend',
+
+  // MonthlyTrendView (second Reports sub-page, modeled on a second Figma reference)
+  'reports.monthly.breadcrumb': 'Reports / Global Backlog Analyzer / Global Reports',
+  'reports.monthly.title': 'BDP Monthly Trend',
+  'reports.monthly.dataSubjects': 'Data Subjects',
+  'reports.monthly.maturityLevel': 'Maturity Level',
+  'reports.monthly.currentTop3': 'Current Monthly Top3',
+  'reports.monthly.yearlyTop3': 'Yearly Momentum Top3',
+  'reports.monthly.yearlyBottom3': 'Yearly Momentum Bottom3',
+  'reports.monthly.chartTitle': 'Data Subject Count & Maturity Level, by Domain',
+  'reports.monthly.dataRangeLabel': 'Data Range',
+  'reports.monthly.legendSubjects': 'Data Subjects (total)',
+  'reports.monthly.legendMaturity': 'Maturity Average Level',
+  'reports.monthly.axisSubjects': 'Data Subject Count',
+  'reports.monthly.axisMaturity': 'Maturity Level',
 } as const
 
 export type TKey = keyof typeof en
@@ -431,4 +448,21 @@ export const zh: Record<TKey, string> = {
   'reports.grid.colMaturity': 'Maturity Level',
   'reports.dimChart.title': '各 Domain 的 Maturity Level(維度拆解)',
   'reports.dimChart.maturityLine': 'Maturity Level',
+  'reports.viewGlobal': '全公司報表',
+  'reports.viewMonthly': '月趨勢',
+
+  // MonthlyTrendView
+  'reports.monthly.breadcrumb': '報表 / Global Backlog Analyzer / 全公司報表',
+  'reports.monthly.title': 'BDP 月趨勢',
+  'reports.monthly.dataSubjects': 'Data Subjects',
+  'reports.monthly.maturityLevel': 'Maturity Level',
+  'reports.monthly.currentTop3': '本月即時 Top3',
+  'reports.monthly.yearlyTop3': '年度進步 Top3',
+  'reports.monthly.yearlyBottom3': '年度進步 Bottom3',
+  'reports.monthly.chartTitle': '各 Domain 的 Data Subject 數量與 Maturity Level',
+  'reports.monthly.dataRangeLabel': 'Data Range',
+  'reports.monthly.legendSubjects': 'Data Subjects(總計)',
+  'reports.monthly.legendMaturity': 'Maturity 平均等級',
+  'reports.monthly.axisSubjects': 'Data Subject 數量',
+  'reports.monthly.axisMaturity': 'Maturity Level',
 }
