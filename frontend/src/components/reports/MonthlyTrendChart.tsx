@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Card, CardContent, Typography, Box, Stack, TextField, MenuItem } from '@mui/material'
+import { Card, CardContent, Typography, Box, Stack, TextField, MenuItem, Checkbox, ListItemText } from '@mui/material'
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday'
 import { AgCharts } from 'ag-charts-react'
 import type { AgCartesianChartOptions } from 'ag-charts-community'
@@ -27,7 +27,7 @@ export default function MonthlyTrendChart() {
   const t = useT()
   const mode = useStore((s) => s.mode)
   const maxLevel = useStore((s) => s.maxLevel)
-  const [domainFilter, setDomainFilter] = useState('')
+  const [domainFilter, setDomainFilter] = useState<string[]>([])
   const [trend, setTrend] = useState<{ domains: DomainTrendSummary[]; dates: string[] } | null>(null)
   const [summary, setSummary] = useState<{ latest: OrgSnapshot; trend: OrgSnapshot[] } | null>(null)
 
@@ -42,7 +42,7 @@ export default function MonthlyTrendChart() {
   const { rows, domainNames } = useMemo(() => {
     if (!trend || !summary) return { rows: [] as Record<string, number | string>[], domainNames: [] as string[] }
 
-    const domains = domainFilter ? trend.domains.filter((d) => d.domain === domainFilter) : trend.domains
+    const domains = domainFilter.length ? trend.domains.filter((d) => domainFilter.includes(d.domain)) : trend.domains
     const totalMonthly = bucketByMonth(
       summary.trend.map((s) => s.snapshot_date),
       summary.trend.map((s) => s.subject_count),
@@ -153,13 +153,23 @@ export default function MonthlyTrendChart() {
             select
             label={t('reports.domainFilterLabel')}
             value={domainFilter}
-            onChange={(e) => setDomainFilter(e.target.value)}
-            sx={{ width: 160 }}
+            onChange={(e) => {
+              const value = e.target.value as unknown as string[]
+              setDomainFilter(typeof value === 'string' ? (value as string).split(',') : value)
+            }}
+            slotProps={{
+              select: {
+                multiple: true,
+                displayEmpty: true,
+                renderValue: (selected) => ((selected as string[]).length ? (selected as string[]).join(', ') : t('reports.domainFilterAll')),
+              },
+            }}
+            sx={{ width: 220 }}
           >
-            <MenuItem value="">{t('reports.domainFilterAll')}</MenuItem>
             {DOMAIN_ORDER.map((d) => (
               <MenuItem key={d} value={d}>
-                {d}
+                <Checkbox size="small" checked={domainFilter.includes(d)} sx={{ p: 0, mr: 1 }} />
+                <ListItemText primary={d} />
               </MenuItem>
             ))}
           </TextField>

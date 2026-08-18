@@ -306,14 +306,36 @@ def build_maturity_snapshots(subject, context, sub_scores, assertions, incidents
 
 
 def build_org_snapshots(subjects_by_domain, maturity_by_subject):
+    # Fabricate a plausible subject-count history per domain, same backward-
+    # walk style as build_maturity_snapshots' level walk: index 0 = today's
+    # real count, walking backward mostly flat with an occasional -1 step,
+    # floored a few subjects below today's count. Without this, every
+    # historical week used today's count verbatim (subject_count never
+    # varied -- only avg_maturity_level did), so any Domain looked flat on
+    # a subject-count-over-time chart regardless of which one you picked.
+    counts_by_domain = {}
+    for domain, subs in subjects_by_domain.items():
+        current = len(subs)
+        floor = max(1, current - random.randint(2, 5))
+        counts = [None] * SNAPSHOT_WEEKS
+        counts[0] = current
+        for w in range(1, SNAPSHOT_WEEKS):
+            prev = counts[w - 1]
+            step = -1 if (prev > floor and random.random() < 0.15) else 0
+            counts[w] = prev + step
+        counts_by_domain[domain] = counts
+
     org_snapshots = []
     for w in range(SNAPSHOT_WEEKS):
         snapshot_date = week_start(w)
         global_levels = []
+        global_count = 0
         for domain, subs in subjects_by_domain.items():
             domain_levels = [maturity_by_subject[s["_id"]][w]["maturity_level"] for s in subs]
             global_levels.extend(domain_levels)
             avg = round(sum(domain_levels) / len(domain_levels), 2) if domain_levels else 0
+            domain_count = counts_by_domain[domain][w]
+            global_count += domain_count
             org_snapshots.append({
                 "_id": ObjectId(),
                 "scope_type": "DOMAIN",
@@ -321,7 +343,7 @@ def build_org_snapshots(subjects_by_domain, maturity_by_subject):
                 "domain": domain,
                 "snapshot_date": snapshot_date,
                 "avg_maturity_level": avg,
-                "subject_count": len(subs),
+                "subject_count": domain_count,
             })
         avg_global = round(sum(global_levels) / len(global_levels), 2) if global_levels else 0
         org_snapshots.append({
@@ -331,7 +353,7 @@ def build_org_snapshots(subjects_by_domain, maturity_by_subject):
             "domain": None,
             "snapshot_date": snapshot_date,
             "avg_maturity_level": avg_global,
-            "subject_count": len(global_levels),
+            "subject_count": global_count,
         })
 
     # now compute data_quality_index + wow/mom/yoy deltas per (scope_type, scope_id) series
